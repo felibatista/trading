@@ -133,7 +133,7 @@ export default function App() {
           </div>
         </div>
 
-        <PositionsTable positions={positionList} />
+        <PositionsTable positions={positionList} price={lastClose} />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <HistoryTable fills={fillList} />
           <ActivityLog decisions={decisionList} />
