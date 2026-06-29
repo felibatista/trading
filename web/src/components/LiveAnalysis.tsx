@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Bot, Minus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { actionLabel, formatUsd } from '@/lib/format'
+import { actionLabel, fixed, formatUsd } from '@/lib/format'
 import type { Decision, Strategy } from '@/lib/types'
 
 function actionVariant(action: string): 'success' | 'danger' | 'default' {
@@ -23,7 +23,7 @@ export function LiveAnalysis({
   const overbought = strategy?.rsi_overbought ?? 70
 
   let trend: 'up' | 'down' | 'flat' = 'flat'
-  if (decision) {
+  if (decision && decision.ema_fast != null && decision.ema_slow != null) {
     if (decision.ema_fast > decision.ema_slow) trend = 'up'
     else if (decision.ema_fast < decision.ema_slow) trend = 'down'
   }
@@ -100,7 +100,7 @@ export function LiveAnalysis({
                         : 'text-zinc-700'
                   }`}
                 >
-                  {rsi != null ? rsi.toFixed(1) : '—'}
+                  {fixed(rsi, 1)}
                   {rsiZone === 'oversold' && ' · sobreventa'}
                   {rsiZone === 'overbought' && ' · sobrecompra'}
                 </span>
@@ -128,8 +128,8 @@ export function LiveAnalysis({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">EMA rápida {decision.ema_fast.toFixed(2)}</Badge>
-              <Badge variant="outline">EMA lenta {decision.ema_slow.toFixed(2)}</Badge>
+              <Badge variant="outline">EMA rápida {fixed(decision.ema_fast, 2)}</Badge>
+              <Badge variant="outline">EMA lenta {fixed(decision.ema_slow, 2)}</Badge>
             </div>
 
             <div>

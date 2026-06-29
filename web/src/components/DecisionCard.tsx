@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { actionLabel } from '@/lib/format'
+import { actionLabel, fixed } from '@/lib/format'
 import type { Decision } from '@/lib/types'
 
 function actionVariant(action: string): 'success' | 'danger' | 'default' {
@@ -35,9 +35,9 @@ export function DecisionCard({ decision }: { decision: Decision | null }) {
             </Badge>
             <p className="text-sm text-zinc-600">{decision.reason}</p>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">RSI {decision.rsi.toFixed(1)}</Badge>
-              <Badge variant="outline">EMA rápida {decision.ema_fast.toFixed(2)}</Badge>
-              <Badge variant="outline">EMA lenta {decision.ema_slow.toFixed(2)}</Badge>
+              <Badge variant="outline">RSI {fixed(decision.rsi, 1)}</Badge>
+              <Badge variant="outline">EMA rápida {fixed(decision.ema_fast, 2)}</Badge>
+              <Badge variant="outline">EMA lenta {fixed(decision.ema_slow, 2)}</Badge>
             </div>
             <p className="text-xs text-zinc-400 tabular-nums">{decision.ts}</p>
           </div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionLabel,
+  fixed,
   formatAgo,
   formatCountdown,
   formatPct,
@@ -9,6 +10,20 @@ import {
   pnlColor,
   winRate,
 } from './format'
+
+describe('fixed', () => {
+  it('formatea números con los decimales pedidos', () => {
+    expect(fixed(41.234, 1)).toBe('41.2')
+    expect(fixed(30.5, 2)).toBe('30.50')
+    expect(fixed(0, 2)).toBe('0.00')
+  })
+  it('devuelve — para null / undefined / NaN', () => {
+    // indicadores ausentes (estrategias no-EMA) llegan null desde la API
+    expect(fixed(null, 2)).toBe('—')
+    expect(fixed(undefined, 2)).toBe('—')
+    expect(fixed(NaN, 2)).toBe('—')
+  })
+})
 
 describe('formatUsd', () => {
   it('formatea con símbolo y 2 decimales', () => {

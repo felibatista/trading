@@ -47,9 +47,10 @@ export interface Decision {
   symbol: string
   action: string
   reason: string
-  ema_fast: number
-  ema_slow: number
-  rsi: number
+  // Indicadores EMA/RSI: null cuando la estrategia no los produce (no-ema_rsi).
+  ema_fast: number | null
+  ema_slow: number | null
+  rsi: number | null
   ai_action?: string | null
   ai_confidence?: number | null
   ai_rationale?: string | null

@@ -9,6 +9,17 @@ export function formatUsd(value: number): string {
   }).format(value)
 }
 
+/**
+ * `value.toFixed(digits)` tolerante a nulos: devuelve "—" si el valor es
+ * null/undefined/NaN. Indicadores específicos de estrategia (ema_fast, rsi…)
+ * llegan null desde la API cuando la estrategia no los produce (p. ej. MACD),
+ * porque el backend guarda NaN y pydantic lo serializa como null.
+ */
+export function fixed(value: number | null | undefined, digits: number): string {
+  if (value == null || Number.isNaN(value)) return '—'
+  return value.toFixed(digits)
+}
+
 export function formatPct(value: number): string {
   const sign = value > 0 ? '+' : ''
   return `${sign}${(value * 100).toFixed(2)}%`
