@@ -13,7 +13,13 @@ import { Delta } from '@/components/Delta'
 import { formatUsd } from '@/lib/format'
 import type { Position } from '@/lib/types'
 
-export function PositionsTable({ positions }: { positions: Position[] }) {
+export function PositionsTable({
+  positions,
+  price,
+}: {
+  positions: Position[]
+  price?: number | null
+}) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -51,7 +57,8 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
               </TableRow>
             ) : (
               positions.map((p) => {
-                const current = p.entry_price // fallback: sin precio en vivo
+                // Precio en vivo del feed; si todavía no llegó, cae a la entrada (P&L 0).
+                const current = price && price > 0 ? price : p.entry_price
                 const pnl = (current - p.entry_price) * p.quantity
                 const value = current * p.quantity
                 return (
