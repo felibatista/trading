@@ -15,13 +15,13 @@ class Store:
         self._migrate_legacy()
 
     def _migrate_legacy(self) -> None:
-        # Solo SQLite: agrega columnas faltantes a tablas creadas con esquemas viejos.
+        # Solo SQLite: adapta tablas creadas con esquemas viejos.
         if self._engine.dialect.name != "sqlite":
             return
         insp = inspect(self._engine)
         existing = set(insp.get_table_names())
-        # Agrega columna account a las tablas principales (si les falta)
-        for table in ("decisions", "fills", "positions", "equity"):
+        # Agrega columna account (ADD COLUMN conserva el resto de las filas).
+        for table in ("decisions", "fills", "equity"):
             if table not in existing:
                 continue
             cols = {c["name"] for c in insp.get_columns(table)}
@@ -30,9 +30,29 @@ class Store:
                     conn.execute(text(
                         f"ALTER TABLE {table} ADD COLUMN account TEXT NOT NULL DEFAULT 'default'"
                     ))
-        # Agrega columnas ai_* a decisions (si les falta, quedan NULL en filas viejas)
+        # positions necesita PK compuesta (account, symbol). Un ADD COLUMN no cambia
+        # la PK vieja (solo `symbol`), así que si la PK no es la compuesta reconstruimos
+        # la tabla. Detectamos por PK (no por columna) para reparar también una DB ya
+        # migrada por la versión anterior (que dejó account pero la PG vieja).
+        if "positions" in existing:
+            pk = set(insp.get_pk_constraint("positions").get("constrained_columns") or [])
+            if pk != {"account", "symbol"}:
+                legacy_cols = {c["name"] for c in insp.get_columns("positions")}
+                acct = "account" if "account" in legacy_cols else "'default'"
+                with self._engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE positions RENAME TO positions_legacy"))
+                positions.create(self._engine)
+                with self._engine.begin() as conn:
+                    conn.execute(text(
+                        "INSERT INTO positions"
+                        " (account, symbol, quantity, entry_price, stop_loss, take_profit, opened_at)"
+                        f" SELECT {acct}, symbol, quantity, entry_price, stop_loss, take_profit, opened_at"
+                        " FROM positions_legacy"
+                    ))
+                    conn.execute(text("DROP TABLE positions_legacy"))
+        # Agrega columnas ai_* a decisions (si les falta, quedan NULL en filas viejas).
         if "decisions" in existing:
-            cols = {c["name"] for c in insp.get_columns("decisions")}
+            cols = {c["name"] for c in inspect(self._engine).get_columns("decisions")}
             for col, typedef in [
                 ("ai_action", "TEXT"),
                 ("ai_confidence", "REAL"),
