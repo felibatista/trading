@@ -7,6 +7,7 @@ from bot.strategy.ema_rsi import evaluate
 from bot.strategy.bollinger import decide_bollinger
 from bot.strategy.breakout import decide_breakout
 from bot.strategy.macd import decide_macd
+from bot.strategy.price_action import decide_price_action
 
 
 def decide_ema_rsi(df, params: dict) -> Signal:
@@ -25,6 +26,7 @@ STRATEGIES: dict[str, StrategyFn] = {
     "macd": decide_macd,
     "bollinger": decide_bollinger,
     "breakout": decide_breakout,
+    "price_action": decide_price_action,
 }
 
 
