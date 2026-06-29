@@ -72,5 +72,60 @@ class Store:
             rows = [dict(r._mapping) for r in conn.execute(stmt)]
         return list(reversed(rows))
 
+    # ---- fills ----
+    def record_fill(self, account: str, ts: str, fill: Fill) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(insert(fills).values(
+                account=account, ts=ts, symbol=fill.symbol, side=fill.side.value,
+                quantity=fill.quantity, price=fill.price, fee=fill.fee,
+            ))
+
+    def recent_fills(self, account: str, limit: int = 50) -> list[dict]:
+        stmt = (
+            select(fills.c.ts, fills.c.symbol, fills.c.side,
+                   fills.c.quantity, fills.c.price, fills.c.fee)
+            .where(fills.c.account == account)
+            .order_by(fills.c.id.desc())
+            .limit(limit)
+        )
+        with self._engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(stmt)]
+
+    # ---- posiciones (upsert cross-DB: update y si no afecta filas, insert) ----
+    def upsert_position(self, account: str, pos: Position, opened_at: str) -> None:
+        values = dict(
+            quantity=pos.quantity, entry_price=pos.entry_price,
+            stop_loss=pos.stop_loss, take_profit=pos.take_profit,
+        )
+        with self._engine.begin() as conn:
+            res = conn.execute(
+                update(positions)
+                .where(positions.c.account == account, positions.c.symbol == pos.symbol)
+                .values(**values)
+            )
+            if res.rowcount == 0:
+                conn.execute(insert(positions).values(
+                    account=account, symbol=pos.symbol, opened_at=opened_at, **values,
+                ))
+
+    def remove_position(self, account: str, symbol: str) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(
+                delete(positions)
+                .where(positions.c.account == account, positions.c.symbol == symbol)
+            )
+
+    def get_positions(self, account: str) -> dict[str, Position]:
+        stmt = select(
+            positions.c.symbol, positions.c.quantity, positions.c.entry_price,
+            positions.c.stop_loss, positions.c.take_profit,
+        ).where(positions.c.account == account)
+        with self._engine.connect() as conn:
+            rows = conn.execute(stmt).all()
+        return {
+            r.symbol: Position(r.symbol, r.quantity, r.entry_price, r.stop_loss, r.take_profit)
+            for r in rows
+        }
+
     def close(self) -> None:
         self._engine.dispose()
