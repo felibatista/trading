@@ -4,6 +4,7 @@ from bot.config import StrategyParams
 from bot.models import Signal
 from bot.strategy.base import StrategyFn
 from bot.strategy.ema_rsi import evaluate
+from bot.strategy.bollinger import decide_bollinger
 from bot.strategy.macd import decide_macd
 
 
@@ -21,6 +22,7 @@ def decide_ema_rsi(df, params: dict) -> Signal:
 STRATEGIES: dict[str, StrategyFn] = {
     "ema_rsi": decide_ema_rsi,
     "macd": decide_macd,
+    "bollinger": decide_bollinger,
 }
 
 

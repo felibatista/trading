@@ -24,3 +24,13 @@ def macd(
     signal_line = ema(macd_line, signal)
     hist = macd_line - signal_line
     return macd_line, signal_line, hist
+
+
+def bollinger(
+    series: pd.Series, period: int = 20, num_std: float = 2.0
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    mid = series.rolling(period).mean()
+    std = series.rolling(period).std(ddof=0)
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    return mid, upper, lower
