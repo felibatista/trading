@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _STRATS = {"ema_rsi", "macd", "bollinger", "breakout", "price_action"}
 _TFS = {"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"}
@@ -122,3 +122,31 @@ class AccountUpdate(BaseModel):
         if v is not None and v not in _PROVIDERS:
             raise ValueError(f"proveedor inválido: {v}")
         return v
+
+
+class BacktestRequest(BaseModel):
+    # `from` es palabra reservada en Python: se acepta como alias y como from_.
+    model_config = ConfigDict(populate_by_name=True)
+    days: int = Field(default=7, ge=1, le=90)
+    from_: str | None = Field(default=None, alias="from")
+    to: str | None = None
+    symbol: str | None = None
+
+
+class BacktestPoint(BaseModel):
+    ts: str
+    equity: float
+
+
+class BacktestResultOut(BaseModel):
+    account_id: str
+    name: str
+    strategy: str
+    ai: bool
+    return_pct: float
+    max_drawdown_pct: float
+    win_rate: float
+    num_trades: int
+    final_equity: float
+    exposure: float
+    equity_curve: list[BacktestPoint] = Field(default_factory=list)
