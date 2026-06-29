@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -17,6 +18,7 @@ from bot.ai.advisor import DEFAULT_MODEL_BY_PROVIDER
 from api.models import (
     AccountOut,
     AccountUpdate,
+    BacktestJobStatus,
     BacktestPoint,
     BacktestRequest,
     BacktestResultOut,
@@ -74,9 +76,17 @@ _BACKTEST_BUCKET_MS = 300_000
 _BACKTEST_CACHE_MAX = 16                       # tope de entradas (acota la RAM)
 _BACKTEST_MAX_SPAN_MS = 31 * 86_400_000        # ventana máxima permitida (≈ presets del panel)
 _backtest_cache: dict[tuple, object] = {}
-# Single-flight: un solo backtest a la vez para no saturar el threadpool del server
-# (cada uno es pesado y síncrono). Requests concurrentes reciben 409 al toque.
+# Single-flight: un solo backtest a la vez para no saturar el server (cada uno es pesado).
+# Requests concurrentes reciben 409 al toque.
 _backtest_lock = threading.Lock()
+
+# Jobs en background: el backtest del 1m sobre días corre MUCHO más que el timeout del
+# proxy (Cloudflare ~100s → 524). Por eso POST arranca un thread y devuelve un job_id;
+# el panel hace polling de GET /api/backtest/{job_id} hasta 'done'. Store en memoria
+# acotado (FIFO). Override del exchange/factory se resuelve en el request y se pasa al
+# thread (así los dependency_overrides de los tests siguen aplicando).
+_BACKTEST_JOBS_MAX = 8
+_backtest_jobs: dict[str, dict] = {}
 
 
 def set_backtest_exchange(exchange) -> None:
@@ -118,6 +128,42 @@ def _downsample_curve(curve: list[dict], max_points: int = 300) -> list[Backtest
     if sampled[-1]["ts"] != curve[-1]["ts"]:
         sampled.append(curve[-1])
     return [BacktestPoint(ts=p["ts"], equity=p["equity"]) for p in sampled]
+
+
+def _result_to_out(r) -> BacktestResultOut:
+    return BacktestResultOut(
+        account_id=r.account_id, name=r.name, strategy=r.strategy, ai=r.ai,
+        return_pct=r.return_pct, max_drawdown_pct=r.max_drawdown_pct,
+        win_rate=r.win_rate, num_trades=r.num_trades, final_equity=r.final_equity,
+        exposure=r.exposure, starting_cash=r.starting_cash,
+        sharpe=r.sharpe, profit_factor=r.profit_factor,
+        equity_curve=_downsample_curve(r.equity_curve),
+    )
+
+
+def _run_backtest_job(
+    job_id: str, *, exchange, advisor_factory, accounts, symbol, since_ms, until_ms,
+    risk, fee_rate, slippage,
+) -> None:
+    """Corre el backtest en un thread y deja el resultado en _backtest_jobs. Libera el
+    single-flight lock al terminar (lo tomó el request que lo lanzó)."""
+    try:
+        tfs = sorted({a["timeframe"] for a in accounts})
+        candles_by_tf = {
+            tf: _cached_candles(exchange, symbol, tf, since_ms, until_ms) for tf in tfs
+        }
+        results = run_fleet_backtest(
+            accounts, candles_by_tf, risk=risk, fee_rate=fee_rate, slippage=slippage,
+            advisor_factory=advisor_factory,
+        )
+        _backtest_jobs[job_id] = {
+            "status": "done", "results": [_result_to_out(r) for r in results], "error": None,
+        }
+    except Exception as exc:  # noqa: BLE001 - el error viaja al panel vía el job
+        logger.exception("backtest job %s falló", job_id)
+        _backtest_jobs[job_id] = {"status": "error", "results": None, "error": str(exc)}
+    finally:
+        _backtest_lock.release()
 
 
 def _cors_origins() -> list[str]:
@@ -315,13 +361,13 @@ def create_app() -> FastAPI:
             starting_cash=data["starting_cash"],
         )
 
-    @app.post("/api/backtest", response_model=list[BacktestResultOut])
-    def backtest(
+    @app.post("/api/backtest", response_model=BacktestJobStatus, status_code=202)
+    def start_backtest(
         req: BacktestRequest,
         config: Config = Depends(get_config),
         exchange=Depends(get_backtest_exchange),
         advisor_factory=Depends(get_backtest_advisor_factory),
-    ) -> list[BacktestResultOut]:
+    ) -> BacktestJobStatus:
         symbol = req.symbol or DEFAULT_ACCOUNTS[0]["symbol"]
         accounts = [{**a, "symbol": symbol} for a in DEFAULT_ACCOUNTS]
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
@@ -330,34 +376,38 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=422, detail="la fecha 'hasta' debe ser mayor que 'desde'")
         if until_ms - since_ms > _BACKTEST_MAX_SPAN_MS:
             raise HTTPException(status_code=422, detail="ventana demasiado grande (máx ~31 días)")
-        # Single-flight: rechazá al toque si ya hay uno corriendo (no encolar, no saturar).
+        # Single-flight: un backtest a la vez (lo libera el thread al terminar).
         if not _backtest_lock.acquire(blocking=False):
-            raise HTTPException(status_code=409, detail="ya hay un backtest en curso, probá de nuevo")
+            raise HTTPException(status_code=409, detail="ya hay un backtest en curso, esperá a que termine")
+        job_id = uuid.uuid4().hex[:12]
+        while len(_backtest_jobs) >= _BACKTEST_JOBS_MAX:
+            _backtest_jobs.pop(next(iter(_backtest_jobs)))  # evicta el más viejo (FIFO)
+        _backtest_jobs[job_id] = {"status": "running", "results": None, "error": None}
         try:
-            tfs = sorted({a["timeframe"] for a in accounts})
-            try:
-                candles_by_tf = {
-                    tf: _cached_candles(exchange, symbol, tf, since_ms, until_ms) for tf in tfs
-                }
-            except Exception as exc:  # noqa: BLE001 - error claro en vez de 500 crudo
-                raise HTTPException(status_code=502, detail=f"no se pudieron bajar datos: {exc}")
-            results = run_fleet_backtest(
-                accounts, candles_by_tf, risk=config.risk,
-                fee_rate=config.broker.fee_rate, slippage=config.broker.slippage,
-                advisor_factory=advisor_factory,
-            )
-        finally:
+            threading.Thread(
+                target=_run_backtest_job,
+                kwargs=dict(
+                    job_id=job_id, exchange=exchange, advisor_factory=advisor_factory,
+                    accounts=accounts, symbol=symbol, since_ms=since_ms, until_ms=until_ms,
+                    risk=config.risk, fee_rate=config.broker.fee_rate,
+                    slippage=config.broker.slippage,
+                ),
+                name=f"backtest-{job_id}", daemon=True,
+            ).start()
+        except Exception:  # noqa: BLE001 - no dejar el lock tomado si no arrancó el thread
             _backtest_lock.release()
-        return [
-            BacktestResultOut(
-                account_id=r.account_id, name=r.name, strategy=r.strategy, ai=r.ai,
-                return_pct=r.return_pct, max_drawdown_pct=r.max_drawdown_pct,
-                win_rate=r.win_rate, num_trades=r.num_trades, final_equity=r.final_equity,
-                exposure=r.exposure, starting_cash=r.starting_cash,
-                equity_curve=_downsample_curve(r.equity_curve),
-            )
-            for r in results
-        ]
+            _backtest_jobs[job_id] = {"status": "error", "results": None, "error": "no se pudo iniciar"}
+            raise
+        return BacktestJobStatus(job_id=job_id, status="running")
+
+    @app.get("/api/backtest/{job_id}", response_model=BacktestJobStatus)
+    def backtest_status(job_id: str) -> BacktestJobStatus:
+        job = _backtest_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="backtest no encontrado")
+        return BacktestJobStatus(
+            job_id=job_id, status=job["status"], results=job["results"], error=job["error"],
+        )
 
     web_dist = os.environ.get("AMERICO_WEB_DIST", "web_dist")
     assets = os.path.join(web_dist, "assets")

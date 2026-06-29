@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { Power, Settings } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { Status } from '@/lib/types'
+import type { Status, View } from '@/lib/types'
 
-const TABS = ['Panel', 'Backtest', 'Historial', 'Config']
+const TABS: { key: View; label: string }[] = [
+  { key: 'live', label: 'Panel' },
+  { key: 'backtest', label: 'Backtest' },
+]
 
 function BrandMark() {
   return (
@@ -47,7 +50,15 @@ function StopControl() {
   )
 }
 
-export function TopBar({ status }: { status: Status | null }) {
+export function TopBar({
+  status,
+  view = 'live',
+  onNavigate,
+}: {
+  status: Status | null
+  view?: View
+  onNavigate?: (v: View) => void
+}) {
   return (
     <header className="sticky top-0 z-20 border-b border-zinc-200/80 bg-white/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
@@ -60,16 +71,18 @@ export function TopBar({ status }: { status: Status | null }) {
             </div>
           </div>
           <nav className="hidden items-center gap-1 md:flex">
-            {TABS.map((t, i) => (
+            {TABS.map((t) => (
               <button
-                key={t}
+                key={t.key}
+                onClick={() => onNavigate?.(t.key)}
+                aria-current={view === t.key ? 'page' : undefined}
                 className={
-                  i === 0
+                  view === t.key
                     ? 'rounded-md bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700'
                     : 'rounded-md px-3 py-1.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900'
                 }
               >
-                {t}
+                {t.label}
               </button>
             ))}
           </nav>

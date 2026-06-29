@@ -98,6 +98,8 @@ export interface BacktestResult {
   final_equity: number
   exposure: number
   starting_cash: number
+  sharpe: number
+  profit_factor: number | null
   equity_curve: BacktestPoint[]
 }
 
@@ -107,3 +109,12 @@ export interface BacktestRequest {
   to?: string
   symbol?: string
 }
+
+export interface BacktestJobStatus {
+  job_id: string
+  status: 'running' | 'done' | 'error'
+  results: BacktestResult[] | null
+  error: string | null
+}
+
+export type View = 'live' | 'backtest'

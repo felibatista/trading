@@ -21,16 +21,23 @@ def resolve_window(
     return since, until
 
 
+def _pf_str(r: BacktestResult) -> str:
+    if r.profit_factor is None:
+        return "∞" if r.num_trades > 0 else "—"  # sin pérdidas vs sin trades
+    return f"{r.profit_factor:.2f}"
+
+
 def format_table(results: list[BacktestResult], label: str) -> str:
     rows = sorted(results, key=lambda r: r.return_pct, reverse=True)
     lines = [
         f"Backtest {label} · {len(results)} estrategias",
-        f"{'estrategia':<14}{'ret%':>9}{'maxDD%':>9}{'win%':>8}{'#tr':>6}{'equity':>12}  IA",
+        f"{'estrategia':<14}{'ret%':>9}{'maxDD%':>9}{'win%':>8}{'sharpe':>8}"
+        f"{'PF':>7}{'#tr':>6}{'equity':>12}  IA",
     ]
     for r in rows:
         lines.append(
             f"{r.strategy:<14}{r.return_pct:>9.2f}{r.max_drawdown_pct:>9.2f}"
-            f"{r.win_rate * 100:>8.1f}{r.num_trades:>6}{r.final_equity:>12.2f}"
-            f"  {'sí' if r.ai else 'no'}"
+            f"{r.win_rate * 100:>8.1f}{r.sharpe:>8.2f}{_pf_str(r):>7}"
+            f"{r.num_trades:>6}{r.final_equity:>12.2f}  {'sí' if r.ai else 'no'}"
         )
     return "\n".join(lines)

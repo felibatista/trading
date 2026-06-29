@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+import time
 
 from fastapi.testclient import TestClient
 
+import api.app as appmod
 from api.app import create_app, get_backtest_advisor_factory, get_backtest_exchange
 from bot.backtest.data import timeframe_to_ms
 from bot.models import AIVerdict
@@ -33,33 +35,52 @@ def _stub_factory(provider, model, timeout, retries):
 
 
 def _client() -> TestClient:
+    # Estado de backtest es a nivel módulo: limpiar entre tests para aislarlos.
+    appmod._backtest_cache.clear()
+    appmod._backtest_jobs.clear()
+    if appmod._backtest_lock.locked():
+        appmod._backtest_lock.release()
     app = create_app()
     app.dependency_overrides[get_backtest_exchange] = lambda: FakeExchange()
     app.dependency_overrides[get_backtest_advisor_factory] = lambda: _stub_factory
     return TestClient(app)
 
 
-def test_backtest_endpoint_returns_five_results_ai_only_price_action():
-    r = _client().post("/api/backtest", json={"days": 1})
-    assert r.status_code == 200
-    body = r.json()
+def _run(client: TestClient, payload: dict, timeout_s: float = 15.0) -> list[dict]:
+    r = client.post("/api/backtest", json=payload)
+    assert r.status_code == 202, r.text
+    job_id = r.json()["job_id"]
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        s = client.get(f"/api/backtest/{job_id}").json()
+        if s["status"] == "done":
+            return s["results"]
+        if s["status"] == "error":
+            raise AssertionError(f"job error: {s['error']}")
+        time.sleep(0.1)
+    raise AssertionError("el job no terminó a tiempo")
+
+
+def test_backtest_job_returns_five_results_ai_only_price_action():
+    body = _run(_client(), {"days": 1})
     assert len(body) == 5
     by_strat = {x["strategy"]: x for x in body}
     assert by_strat["price_action"]["ai"] is True
     assert all(x["ai"] is False for x in body if x["strategy"] != "price_action")
     for x in body:
         assert isinstance(x["equity_curve"], list)
-        assert len(x["equity_curve"]) <= 300        # downsampleado
-        assert {"return_pct", "max_drawdown_pct", "win_rate", "num_trades"} <= set(x)
-    assert len(by_strat["price_action"]["equity_curve"]) > 0  # corrió de verdad
+        assert len(x["equity_curve"]) <= 300
+        assert {"return_pct", "max_drawdown_pct", "win_rate", "num_trades", "starting_cash"} <= set(x)
+    assert len(by_strat["price_action"]["equity_curve"]) > 0
 
 
 def test_backtest_accepts_from_to_alias():
-    r = _client().post("/api/backtest", json={"from": "2026-06-01", "to": "2026-06-02"})
-    assert r.status_code == 200
-    body = r.json()
+    body = _run(_client(), {"from": "2026-06-01", "to": "2026-06-02"})
     assert len(body) == 5
-    assert all("starting_cash" in x for x in body)
+
+
+def test_backtest_unknown_job_404():
+    assert _client().get("/api/backtest/noexiste").status_code == 404
 
 
 def test_backtest_rejects_invalid_date():
