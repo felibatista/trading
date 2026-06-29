@@ -12,7 +12,7 @@ services:
     environment:
       # Coolify: dominio explícito (de tu wildcard *.acentus.com.ar) enrutado al
       # puerto 8000 del servicio `app`. Inofensiva en local (la app la ignora).
-      SERVICE_FQDN_APP_8000: "https://americo.acentus.com.ar"
+      SERVICE_FQDN_APP_8000: "https://trade-test.acentus.com.ar"
       PYTHONUNBUFFERED: "1"
       AMERICO_CONFIG: config.docker.yaml
       AMERICO_CORS_ORIGINS: ${AMERICO_CORS_ORIGINS:-*}
