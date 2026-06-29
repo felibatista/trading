@@ -108,7 +108,10 @@ def run_backtest(
     for k in range(warmup, n):
         feed.set_cursor(k)
         ts_holder["ts"] = timestamps.iloc[k - 1].isoformat()  # vela cerrada que se opera
-        engine.run_cycle(symbol)
+        try:
+            engine.run_cycle(symbol)
+        except Exception:  # noqa: BLE001 - aislar un ciclo malo, igual que la flota en vivo
+            pass
         traded_bars += 1
         if store.get_positions(account["id"]).get(symbol) is not None:
             bars_in_position += 1
