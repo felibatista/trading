@@ -5,8 +5,10 @@ services:
       context: .
       dockerfile: Dockerfile
     image: americo:latest
-    ports:
-      - "${WEB_PORT:-8080}:8000"
+    # No publicamos puertos al host: Coolify enruta el dominio a este puerto vía su proxy.
+    # Para correr local con puerto publicado está docker-compose.override.yml (WEB_PORT).
+    expose:
+      - "8000"
     environment:
       PYTHONUNBUFFERED: "1"
       AMERICO_CONFIG: config.docker.yaml

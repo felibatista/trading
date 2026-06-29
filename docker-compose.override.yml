@@ -1,0 +1,9 @@
+# Override SOLO para desarrollo local. `docker compose up` (sin -f) lo mergea
+# automáticamente y publica el puerto del panel en tu máquina.
+# Coolify corre `docker compose -f docker-compose.yml ...` (con -f explícito),
+# así que NO carga este override → no intenta bindear puertos del host (su proxy
+# enruta el dominio al puerto 8000 del contenedor).
+services:
+  app:
+    ports:
+      - "${WEB_PORT:-8080}:8000"
