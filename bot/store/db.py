@@ -1,7 +1,7 @@
 # bot/store/db.py
 from __future__ import annotations
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, inspect, select, text, update
 
 from bot.broker.models import Fill, Position
 from bot.store.engine import make_engine
@@ -12,6 +12,37 @@ class Store:
     def __init__(self, target: str = ":memory:") -> None:
         self._engine = make_engine(target)
         metadata.create_all(self._engine)
+        self._migrate_legacy()
+
+    def _migrate_legacy(self) -> None:
+        # Solo SQLite: agrega columnas faltantes a tablas creadas con esquemas viejos.
+        if self._engine.dialect.name != "sqlite":
+            return
+        insp = inspect(self._engine)
+        existing = set(insp.get_table_names())
+        # Agrega columna account a las tablas principales (si les falta)
+        for table in ("decisions", "fills", "positions", "equity"):
+            if table not in existing:
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            if "account" not in cols:
+                with self._engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE {table} ADD COLUMN account TEXT NOT NULL DEFAULT 'default'"
+                    ))
+        # Agrega columnas ai_* a decisions (si les falta, quedan NULL en filas viejas)
+        if "decisions" in existing:
+            cols = {c["name"] for c in insp.get_columns("decisions")}
+            for col, typedef in [
+                ("ai_action", "TEXT"),
+                ("ai_confidence", "REAL"),
+                ("ai_rationale", "TEXT"),
+            ]:
+                if col not in cols:
+                    with self._engine.begin() as conn:
+                        conn.execute(text(
+                            f"ALTER TABLE decisions ADD COLUMN {col} {typedef}"
+                        ))
 
     # ---- decisiones ----
     def record_decision(

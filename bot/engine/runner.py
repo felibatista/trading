@@ -44,6 +44,7 @@ class Engine:
         decider: Callable[[pd.DataFrame, StrategyParams], Signal] = evaluate,
         advisor: AIAdvisor | None = None,
         ai_affects_execution: bool = False,
+        account: str = "default",
     ) -> None:
         self.feed = feed
         self.broker = broker
@@ -59,9 +60,10 @@ class Engine:
         self.advisor: AIAdvisor = advisor if advisor is not None else NoopAdvisor()
         # La IA solo puede ALTERAR la ejecución (vetar) en paper; en real es informativa.
         self.ai_affects_execution = ai_affects_execution
+        self.account = account
 
     def _equity(self, prices: dict[str, float]) -> float:
-        positions = self.store.get_positions()
+        positions = self.store.get_positions(self.account)
         holdings_value = sum(
             p.quantity * prices.get(s, p.entry_price) for s, p in positions.items()
         )
@@ -69,7 +71,7 @@ class Engine:
 
     def _snapshot(self, price_by_symbol: dict[str, float], ts: str) -> None:
         equity = self._equity(price_by_symbol)
-        self.store.record_equity(ts, equity, self.broker.cash())
+        self.store.record_equity(self.account, ts, equity, self.broker.cash())
 
     def _ai_context(self, symbol: str, signal: Signal, price: float) -> AIContext:
         return AIContext(
@@ -102,7 +104,7 @@ class Engine:
         ts = self.clock()
         ind = signal.indicators
 
-        positions = self.store.get_positions()
+        positions = self.store.get_positions(self.account)
         pos = positions.get(symbol)
 
         # Asesor de IA: SOLO revisa ENTRADAS (compras) que de hecho podrían ejecutarse.
@@ -117,7 +119,7 @@ class Engine:
             verdict = self.advisor.review(self._ai_context(symbol, signal, price))
 
         self.store.record_decision(
-            ts, symbol, signal.action.value, signal.reason,
+            self.account, ts, symbol, signal.action.value, signal.reason,
             ind.get("ema_fast", float("nan")),
             ind.get("ema_slow", float("nan")),
             ind.get("rsi", float("nan")),
@@ -129,8 +131,8 @@ class Engine:
         # 1) Salida por riesgo (stop-loss / take-profit) antes que la señal. Nunca la veta la IA.
         if pos is not None and (price <= pos.stop_loss or price >= pos.take_profit):
             fill = self.broker.sell(symbol, pos.quantity, price)
-            self.store.record_fill(ts, fill)
-            self.store.remove_position(symbol)
+            self.store.record_fill(self.account, ts, fill)
+            self.store.remove_position(self.account, symbol)
             reason = "stop-loss" if price <= pos.stop_loss else "take-profit"
             self.log(f"[{symbol}] SALIDA {reason} qty={fill.quantity:.6f} @ {fill.price:.2f}")
             self._snapshot({symbol: price}, ts)
@@ -150,19 +152,19 @@ class Engine:
                 qty = size_quantity(equity, price, self.risk)
                 if qty > 0:
                     fill = self.broker.buy(symbol, qty, price)
-                    self.store.record_fill(ts, fill)
+                    self.store.record_fill(self.account, ts, fill)
                     new_pos = Position(
                         symbol, fill.quantity, fill.price,
                         stop_loss_price(fill.price, self.risk),
                         take_profit_price(fill.price, self.risk),
                     )
-                    self.store.upsert_position(new_pos, ts)
+                    self.store.upsert_position(self.account, new_pos, ts)
                     detail = f"compra qty={fill.quantity:.6f} @ {fill.price:.2f}"
                     self.log(f"[{symbol}] COMPRA qty={fill.quantity:.6f} @ {fill.price:.2f}")
         elif signal.action is Action.SELL and pos is not None:
             fill = self.broker.sell(symbol, pos.quantity, price)
-            self.store.record_fill(ts, fill)
-            self.store.remove_position(symbol)
+            self.store.record_fill(self.account, ts, fill)
+            self.store.remove_position(self.account, symbol)
             detail = f"venta qty={fill.quantity:.6f} @ {fill.price:.2f}"
             self.log(f"[{symbol}] VENTA qty={fill.quantity:.6f} @ {fill.price:.2f}")
         elif vetoed and self.ai_affects_execution:

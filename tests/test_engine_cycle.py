@@ -39,9 +39,9 @@ def test_buy_opens_position_and_spends_cash():
     engine = make_engine(feed, broker, store, const_decider(Action.BUY))
     result = engine.run_cycle("BTC/USDT")
     assert result.action == "BUY"
-    assert "BTC/USDT" in store.get_positions()
+    assert "BTC/USDT" in store.get_positions("default")
     assert broker.cash() < 10000.0
-    assert store.latest_equity() is not None
+    assert store.latest_equity("default") is not None
 
 
 def test_sell_closes_existing_position():
@@ -51,7 +51,7 @@ def test_sell_closes_existing_position():
     make_engine(feed, broker, store, const_decider(Action.BUY)).run_cycle("BTC/USDT")
     cash_after_buy = broker.cash()
     make_engine(feed, broker, store, const_decider(Action.SELL)).run_cycle("BTC/USDT")
-    assert store.get_positions() == {}
+    assert store.get_positions("default") == {}
     assert broker.cash() > cash_after_buy
 
 
@@ -60,12 +60,12 @@ def test_stop_loss_exit_when_price_below_stop():
     store = Store(":memory:")
     feed = FakeFeed(make_df([100.0, 100.0, 100.0]))   # último cerrado = 100
     make_engine(feed, broker, store, const_decider(Action.BUY)).run_cycle("BTC/USDT")
-    assert "BTC/USDT" in store.get_positions()
+    assert "BTC/USDT" in store.get_positions("default")
     feed.df = make_df([90.0, 90.0, 80.0])             # último cerrado = 90
     result = make_engine(feed, broker, store, const_decider(Action.HOLD)).run_cycle("BTC/USDT")
     assert result.action == "SELL"
     assert "stop-loss" in result.detail
-    assert store.get_positions() == {}
+    assert store.get_positions("default") == {}
 
 
 def test_hold_without_position_does_nothing_but_snapshots():
@@ -74,6 +74,6 @@ def test_hold_without_position_does_nothing_but_snapshots():
     store = Store(":memory:")
     result = make_engine(feed, broker, store, const_decider(Action.HOLD)).run_cycle("BTC/USDT")
     assert result.action == "HOLD"
-    assert store.get_positions() == {}
+    assert store.get_positions("default") == {}
     assert broker.cash() == 10000.0
-    assert store.latest_equity() is not None
+    assert store.latest_equity("default") is not None

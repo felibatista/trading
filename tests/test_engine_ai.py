@@ -53,9 +53,9 @@ def test_ai_veto_blocks_buy_on_paper():
     adv = StubAdvisor(confirm=False, confidence=0.3, rationale="señal débil")
     result = make_engine_ai(_feed(), broker, store, const_decider(Action.BUY), adv, True).run_cycle("BTC/USDT")
     assert result.action == "HOLD"               # la compra fue vetada
-    assert store.get_positions() == {}
+    assert store.get_positions("default") == {}
     assert broker.cash() == 10000.0              # no gastó caja
-    d = store.recent_decisions(1)[0]
+    d = store.recent_decisions("default", 1)[0]
     assert d["action"] == "BUY"                  # la señal cruda se conserva
     assert d["ai_action"] == "HOLD"              # opinión de la IA (veto)
     assert d["ai_confidence"] == 0.3
@@ -68,8 +68,8 @@ def test_ai_confirm_allows_buy():
     adv = StubAdvisor(confirm=True, confidence=0.8, rationale="ok")
     result = make_engine_ai(_feed(), broker, store, const_decider(Action.BUY), adv, True).run_cycle("BTC/USDT")
     assert result.action == "BUY"
-    assert "BTC/USDT" in store.get_positions()
-    d = store.recent_decisions(1)[0]
+    assert "BTC/USDT" in store.get_positions("default")
+    d = store.recent_decisions("default", 1)[0]
     assert d["ai_action"] == "BUY"
     assert d["ai_confidence"] == 0.8
 
@@ -79,8 +79,8 @@ def test_ai_disabled_noop_buys_without_ai_fields():
     store = Store(":memory:")
     result = make_engine_ai(_feed(), broker, store, const_decider(Action.BUY), NoopAdvisor(), True).run_cycle("BTC/USDT")
     assert result.action == "BUY"
-    assert "BTC/USDT" in store.get_positions()
-    d = store.recent_decisions(1)[0]
+    assert "BTC/USDT" in store.get_positions("default")
+    d = store.recent_decisions("default", 1)[0]
     assert d["ai_action"] is None
     assert d["ai_confidence"] is None
 
@@ -89,10 +89,10 @@ def test_ai_never_consulted_for_sell():
     broker = LocalPaperBroker(cash=10000.0)
     store = Store(":memory:")
     make_engine_ai(_feed(), broker, store, const_decider(Action.BUY), NoopAdvisor(), False).run_cycle("BTC/USDT")
-    assert "BTC/USDT" in store.get_positions()
+    assert "BTC/USDT" in store.get_positions("default")
     adv = StubAdvisor(confirm=False)  # intentaría vetar
     make_engine_ai(_feed(), broker, store, const_decider(Action.SELL), adv, True).run_cycle("BTC/USDT")
-    assert store.get_positions() == {}   # la venta de estrategia se ejecuta igual
+    assert store.get_positions("default") == {}   # la venta de estrategia se ejecuta igual
     assert adv.calls == []               # la IA no se consulta para vender
 
 
@@ -103,8 +103,8 @@ def test_ai_veto_is_informational_only_when_execution_not_affected():
     adv = StubAdvisor(confirm=False, confidence=0.2, rationale="riesgoso")
     result = make_engine_ai(_feed(), broker, store, const_decider(Action.BUY), adv, False).run_cycle("BTC/USDT")
     assert result.action == "BUY"
-    assert "BTC/USDT" in store.get_positions()   # NO bloquea la ejecución
-    d = store.recent_decisions(1)[0]
+    assert "BTC/USDT" in store.get_positions("default")   # NO bloquea la ejecución
+    d = store.recent_decisions("default", 1)[0]
     assert d["ai_action"] == "HOLD"              # pero el veto queda registrado
     assert d["ai_rationale"] == "riesgoso"
 
@@ -114,11 +114,11 @@ def test_ai_does_not_gate_protective_stop_loss_exit():
     store = Store(":memory:")
     feed = FakeFeed(make_df([100.0, 100.0, 100.0]))
     make_engine_ai(feed, broker, store, const_decider(Action.BUY), NoopAdvisor(), False).run_cycle("BTC/USDT")
-    assert "BTC/USDT" in store.get_positions()
+    assert "BTC/USDT" in store.get_positions("default")
     feed.df = make_df([90.0, 90.0, 80.0])  # último cerrado 90 < stop (100*0.98)
     adv = StubAdvisor(confirm=False)
     result = make_engine_ai(feed, broker, store, const_decider(Action.HOLD), adv, True).run_cycle("BTC/USDT")
     assert result.action == "SELL"
     assert "stop-loss" in result.detail
-    assert store.get_positions() == {}
+    assert store.get_positions("default") == {}
     assert adv.calls == []  # la IA jamás toca un cierre protector

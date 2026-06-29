@@ -22,8 +22,8 @@ def test_build_broker_paper_uses_config_cash():
 
 def test_build_broker_hydrates_paper_from_store():
     store = Store(":memory:")
-    store.upsert_position(Position("BTC/USDT", 0.5, 100.0, 98.0, 104.0), "t1")
-    store.record_equity("t1", 10050.0, 9000.0)
+    store.upsert_position("default", Position("BTC/USDT", 0.5, 100.0, 98.0, 104.0), "t1")
+    store.record_equity("default", "t1", 10050.0, 9000.0)
     broker = build_broker(Config(), store)
     assert isinstance(broker, LocalPaperBroker)
     assert broker.cash() == 9000.0                 # restored from last equity snapshot cash

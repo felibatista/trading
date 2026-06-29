@@ -6,10 +6,10 @@ from bot.store.db import Store
 def test_record_decision_persists_ai_fields():
     s = Store(":memory:")
     s.record_decision(
-        "t1", "BTC/USDT", "BUY", "cruce", 3.0, 2.0, 40.0,
+        "default", "t1", "BTC/USDT", "BUY", "cruce", 3.0, 2.0, 40.0,
         ai_action="HOLD", ai_confidence=0.42, ai_rationale="señales débiles",
     )
-    d = s.recent_decisions(limit=1)[0]
+    d = s.recent_decisions("default", limit=1)[0]
     assert d["ai_action"] == "HOLD"
     assert d["ai_confidence"] == 0.42
     assert d["ai_rationale"] == "señales débiles"
@@ -17,8 +17,8 @@ def test_record_decision_persists_ai_fields():
 
 def test_record_decision_ai_fields_default_to_none():
     s = Store(":memory:")
-    s.record_decision("t1", "BTC/USDT", "BUY", "cruce", 3.0, 2.0, 40.0)
-    d = s.recent_decisions(limit=1)[0]
+    s.record_decision("default", "t1", "BTC/USDT", "BUY", "cruce", 3.0, 2.0, 40.0)
+    d = s.recent_decisions("default", limit=1)[0]
     assert d["ai_action"] is None
     assert d["ai_confidence"] is None
     assert d["ai_rationale"] is None
@@ -40,13 +40,13 @@ def test_migrates_existing_db_without_ai_columns(tmp_path):
     conn.commit()
     conn.close()
 
-    s = Store(str(db))  # al abrir debe migrar agregando columnas ai_*
-    rows = s.recent_decisions(limit=10)
+    s = Store(str(db))  # al abrir debe migrar agregando columnas ai_* y account
+    rows = s.recent_decisions("default", limit=10)
     assert rows[-1]["reason"] == "viejo"
     assert rows[-1]["ai_action"] is None  # fila vieja queda con ai_* en NULL
 
     s.record_decision(
-        "t1", "BTC/USDT", "BUY", "nuevo", 3.0, 2.0, 40.0,
+        "default", "t1", "BTC/USDT", "BUY", "nuevo", 3.0, 2.0, 40.0,
         ai_action="BUY", ai_confidence=0.9, ai_rationale="ok",
     )
-    assert s.recent_decisions(limit=1)[0]["ai_confidence"] == 0.9
+    assert s.recent_decisions("default", limit=1)[0]["ai_confidence"] == 0.9

@@ -22,7 +22,7 @@ def run_decide(
     return evaluate(df, config.strategy)
 
 
-def build_broker(config: Config, store: Store | None = None) -> Broker:
+def build_broker(config: Config, store: Store | None = None, account: str = "default") -> Broker:
     bp = config.broker
     if bp.kind == "okx_demo":
         return OkxDemoBroker(
@@ -35,10 +35,10 @@ def build_broker(config: Config, store: Store | None = None) -> Broker:
     cash = bp.paper_cash
     holdings: dict[str, float] | None = None
     if store is not None:
-        eq = store.latest_equity()
+        eq = store.latest_equity(account)
         if eq is not None:
             cash = eq[1]
-        positions = store.get_positions()
+        positions = store.get_positions(account)
         if positions:
             holdings = {sym: p.quantity for sym, p in positions.items()}
     return LocalPaperBroker(cash, bp.fee_rate, bp.slippage, holdings=holdings)
@@ -86,7 +86,7 @@ def _cmd_run(args) -> int:
     store = Store(config.db_path)
     engine = Engine(
         feed=CcxtDataFeed(exchange),
-        broker=build_broker(config, store),
+        broker=build_broker(config, store, account="default"),
         store=store,
         strategy=config.strategy,
         risk=config.risk,
@@ -94,6 +94,7 @@ def _cmd_run(args) -> int:
         limit=config.limit,
         advisor=build_advisor(config),
         ai_affects_execution=ai_affects_execution(config),
+        account="default",
     )
     if config.ai.enabled:
         import os
@@ -116,13 +117,13 @@ def _cmd_run(args) -> int:
 def _cmd_status(args) -> int:
     config = load_config(args.config)
     store = Store(config.db_path)
-    eq = store.latest_equity()
+    eq = store.latest_equity("default")
     if eq is None:
         print("Sin corridas todavía. Ejecutá: python -m bot run BTC/USDT")
         return 0
     equity, cash = eq
     print(f"Equity: {equity:.2f}  ·  Caja: {cash:.2f}")
-    positions = store.get_positions()
+    positions = store.get_positions("default")
     print(f"Posiciones abiertas: {len(positions)}")
     for sym, p in positions.items():
         print(
@@ -130,7 +131,7 @@ def _cmd_status(args) -> int:
             f"SL={p.stop_loss:.2f} TP={p.take_profit:.2f}"
         )
     print("Últimas decisiones:")
-    for d in store.recent_decisions(limit=5):
+    for d in store.recent_decisions("default", limit=5):
         print(f"  {d['ts']} {d['symbol']} {d['action']} — {d['reason']}")
     return 0
 

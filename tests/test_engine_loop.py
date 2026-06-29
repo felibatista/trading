@@ -32,7 +32,7 @@ def test_run_loop_runs_each_symbol_per_cycle_and_sleeps_between():
         sleep=lambda s: sleeps.append(s),
     )
     assert cycles == 2
-    assert len(store.recent_decisions(limit=100)) == 4   # 2 símbolos * 2 ciclos
+    assert len(store.recent_decisions("default", limit=100)) == 4   # 2 símbolos * 2 ciclos
     assert sleeps == [10]                                 # duerme una vez (entre ciclos)
 
 
@@ -55,6 +55,6 @@ def test_run_loop_isolates_per_symbol_errors():
         ["BOOM/USDT", "BTC/USDT"], interval_seconds=1, max_cycles=1, sleep=lambda s: None
     )
     assert cycles == 1
-    actions = [d["symbol"] for d in store.recent_decisions(limit=100)]
+    actions = [d["symbol"] for d in store.recent_decisions("default", limit=100)]
     assert "BTC/USDT" in actions
     assert any("ERROR" in m for m in logs)
