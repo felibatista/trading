@@ -1,5 +1,5 @@
 import type {
-  Account, BacktestRequest, BacktestResult, Candle, Decision, EquityPoint, Fill, Position, Status,
+  Account, BacktestJobStatus, BacktestRequest, Candle, Decision, EquityPoint, Fill, Position, Status,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
@@ -52,7 +52,9 @@ export const api = {
     }
     return (await res.json()) as Account
   },
-  runBacktest: async (req: BacktestRequest): Promise<BacktestResult[]> => {
+  // Arranca un backtest en background; devuelve el job a pollear (el 1m/varios días
+  // tarda más que el timeout del proxy, así que NO se resuelve en el request).
+  startBacktest: async (req: BacktestRequest): Promise<BacktestJobStatus> => {
     const res = await fetch(`${BASE}/api/backtest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -63,6 +65,7 @@ export const api = {
       try { const j = await res.json(); detail = JSON.stringify(j.detail ?? j) } catch { /* noop */ }
       throw new Error(detail)
     }
-    return (await res.json()) as BacktestResult[]
+    return (await res.json()) as BacktestJobStatus
   },
+  getBacktestJob: (id: string) => getJson<BacktestJobStatus>(`/api/backtest/${id}`),
 }

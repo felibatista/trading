@@ -31,8 +31,19 @@ export function BacktestView() {
   async function run() {
     setLoading(true)
     setError(null)
+    setResults(null)
     try {
-      setResults(await api.runBacktest({ from, to }))
+      const job = await api.startBacktest({ from, to })
+      // Polling hasta done/error (corre en background en el server). Cap ~6 min.
+      let status = job.status
+      for (let i = 0; status === 'running' && i < 180; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        const s = await api.getBacktestJob(job.job_id)
+        status = s.status
+        if (s.status === 'done') setResults(s.results ?? [])
+        else if (s.status === 'error') throw new Error(s.error ?? 'el backtest falló')
+      }
+      if (status === 'running') throw new Error('el backtest tardó demasiado; probá una ventana más corta')
     } catch (e) {
       setError((e as Error).message)
     } finally {

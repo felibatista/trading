@@ -57,7 +57,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="accent-top h-1 w-full" />
-      <TopBar status={status.data} />
+      <TopBar status={status.data} view={view} onNavigate={setView} />
       <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
         {status.error && (
           <div className="flex items-start gap-2.5 rounded-lg bg-loss-50 px-4 py-3 text-sm text-loss-700 ring-1 ring-inset ring-loss-100">
@@ -66,7 +66,8 @@ export default function App() {
           </div>
         )}
 
-        <div className="flex w-fit gap-1 rounded-lg bg-zinc-100 p-1 text-sm">
+        {/* Switch para mobile: el navbar (tabs) está oculto en pantallas chicas. */}
+        <div className="flex w-fit gap-1 rounded-lg bg-zinc-100 p-1 text-sm md:hidden">
           <button
             onClick={() => setView('live')}
             className={`rounded-md px-3 py-1 font-medium transition ${

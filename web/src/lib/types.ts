@@ -107,3 +107,12 @@ export interface BacktestRequest {
   to?: string
   symbol?: string
 }
+
+export interface BacktestJobStatus {
+  job_id: string
+  status: 'running' | 'done' | 'error'
+  results: BacktestResult[] | null
+  error: string | null
+}
+
+export type View = 'live' | 'backtest'

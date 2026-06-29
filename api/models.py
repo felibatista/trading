@@ -164,3 +164,10 @@ class BacktestResultOut(BaseModel):
     exposure: float
     starting_cash: float
     equity_curve: list[BacktestPoint] = Field(default_factory=list)
+
+
+class BacktestJobStatus(BaseModel):
+    job_id: str
+    status: str  # "running" | "done" | "error"
+    results: list[BacktestResultOut] | None = None
+    error: str | None = None
