@@ -1,5 +1,6 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle } from 'lucide-react'
+import { AccountBar } from '@/components/AccountBar'
 import { ActivityLog } from '@/components/ActivityLog'
 import { EquityChart } from '@/components/EquityChart'
 import { HistoryTable } from '@/components/HistoryTable'
@@ -16,14 +17,23 @@ const LIVE_INTERVAL = 2500
 const SLOW_INTERVAL = 5000
 
 export default function App() {
-  // Lo "vivo" se actualiza rápido.
-  const status = usePolling(useCallback(() => api.getStatus(), []), LIVE_INTERVAL)
-  const candles = usePolling(useCallback(() => api.getCandles(undefined, undefined, 120), []), LIVE_INTERVAL)
-  const decisions = usePolling(useCallback(() => api.getDecisions(20), []), LIVE_INTERVAL)
-  const positions = usePolling(useCallback(() => api.getPositions(), []), LIVE_INTERVAL)
-  // Lo histórico se actualiza más lento.
-  const equity = usePolling(useCallback(() => api.getEquity(200), []), SLOW_INTERVAL)
-  const fills = usePolling(useCallback(() => api.getFills(50), []), SLOW_INTERVAL)
+  const accounts = usePolling(useCallback(() => api.getAccounts(), []), SLOW_INTERVAL)
+  const accountList = accounts.data ?? []
+  const [account, setAccount] = useState<string | null>(null)
+
+  // Selección inicial: primera cuenta cuando llega la lista.
+  useEffect(() => {
+    if (account === null && accountList.length > 0) setAccount(accountList[0].id)
+  }, [account, accountList])
+
+  const acc = account ?? undefined
+
+  const status = usePolling(useCallback(() => api.getStatus(acc), [acc]), LIVE_INTERVAL, [account])
+  const candles = usePolling(useCallback(() => api.getCandles(undefined, undefined, 120, acc), [acc]), LIVE_INTERVAL, [account])
+  const decisions = usePolling(useCallback(() => api.getDecisions(20, acc), [acc]), LIVE_INTERVAL, [account])
+  const positions = usePolling(useCallback(() => api.getPositions(acc), [acc]), LIVE_INTERVAL, [account])
+  const equity = usePolling(useCallback(() => api.getEquity(200, acc), [acc]), SLOW_INTERVAL, [account])
+  const fills = usePolling(useCallback(() => api.getFills(50, acc), [acc]), SLOW_INTERVAL, [account])
 
   const series = equity.data ?? []
   const decisionList = decisions.data ?? []
@@ -39,21 +49,22 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
-      {/* Brand accent across the very top of the layout (Refactoring UI). */}
       <div className="accent-top h-1 w-full" />
       <TopBar status={status.data} />
       <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
         {status.error && (
           <div className="flex items-start gap-2.5 rounded-lg bg-loss-50 px-4 py-3 text-sm text-loss-700 ring-1 ring-inset ring-loss-100">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>
-              No se pudo conectar con la API. ¿Está corriendo uvicorn en el puerto 8000?
-            </span>
+            <span>No se pudo conectar con la API.</span>
           </div>
         )}
+
+        {accountList.length > 0 && (
+          <AccountBar accounts={accountList} selected={account} onSelect={setAccount} />
+        )}
+
         <KpiRow status={status.data} series={series} />
 
-        {/* Vista en vivo: precio analizado en tiempo real + próxima corrida */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <LivePriceChart
@@ -68,7 +79,6 @@ export default function App() {
           <NextRunCard status={status.data} />
         </div>
 
-        {/* Detalle del proceso + evolución del equity */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <LiveAnalysis decision={decisionList[0] ?? null} lastClose={lastClose} strategy={strategy} />
           <div className="lg:col-span-2">
