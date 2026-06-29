@@ -1,4 +1,5 @@
 from bot.ai.advisor import NoopAdvisor
+from bot.broker.models import Position
 from bot.broker.paper import LocalPaperBroker
 from bot.config import RiskParams, StrategyParams
 from bot.engine.runner import Engine
@@ -107,6 +108,20 @@ def test_ai_veto_is_informational_only_when_execution_not_affected():
     d = store.recent_decisions("default", 1)[0]
     assert d["ai_action"] == "HOLD"              # pero el veto queda registrado
     assert d["ai_rationale"] == "riesgoso"
+
+
+def test_close_self_heals_when_broker_holdings_missing():
+    # Desync: el store tiene una posición que el broker NO tiene (p. ej. un fallo
+    # transitorio entre el sell y el remove). El cierre por SL debe AUTOCURAR, no tirar
+    # 'Posición insuficiente' ni tumbar el ciclo/backtest.
+    broker = LocalPaperBroker(cash=10000.0)  # sin holdings → desincronizado con el store
+    store = Store(":memory:")
+    store.upsert_position("default", Position("BTC/USDT", 0.05, 100.0, 95.0, 110.0), CLOCK())
+    feed = FakeFeed(make_df([90.0, 90.0, 80.0]))  # último cerrado 90 <= stop 95 → SL
+    result = make_engine_ai(feed, broker, store, const_decider(Action.HOLD), NoopAdvisor(), False).run_cycle("BTC/USDT")
+    assert result.action == "SELL"               # cierre por SL, sin crashear
+    assert store.get_positions("default") == {}  # posición fantasma reconciliada
+    assert broker.cash() == 10000.0              # no "vendió" lo que no tenía
 
 
 def test_ai_does_not_gate_protective_stop_loss_exit():

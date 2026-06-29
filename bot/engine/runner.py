@@ -97,6 +97,24 @@ class Engine:
             return None
         return signal.action.value if verdict.confirm else Action.HOLD.value
 
+    def _close_position(self, symbol: str, want_qty: float, price: float, ts: str):
+        """Cierra la posición de forma robusta: NUNCA vende más de lo que el broker
+        realmente tiene y reconcilia el store igual. Si el store y el broker se
+        desincronizan (p. ej. un error transitorio entre el sell y el remove), esto
+        autocura en vez de tirar 'Posición insuficiente' y tumbar el ciclo/backtest.
+        Devuelve el Fill (o None si no había holdings que vender)."""
+        held_fn = getattr(self.broker, "holdings", None)
+        held = held_fn(symbol) if held_fn is not None else want_qty
+        sell_qty = min(want_qty, held)
+        fill = None
+        if sell_qty > 1e-12:
+            fill = self.broker.sell(symbol, sell_qty, price)
+            self.store.record_fill(self.account, ts, fill)
+        else:
+            self.log(f"[{symbol}] cierre sin holdings en el broker (store={want_qty:.8f}); reconcilio")
+        self.store.remove_position(self.account, symbol)
+        return fill
+
     def run_cycle(self, symbol: str) -> CycleResult:
         df = drop_forming_candle(self.feed.fetch_ohlcv(symbol, self.timeframe, self.limit))
         if len(df) < 2:
@@ -134,13 +152,12 @@ class Engine:
 
         # 1) Salida por riesgo (stop-loss / take-profit) antes que la señal. Nunca la veta la IA.
         if pos is not None and (price <= pos.stop_loss or price >= pos.take_profit):
-            fill = self.broker.sell(symbol, pos.quantity, price)
-            self.store.record_fill(self.account, ts, fill)
-            self.store.remove_position(self.account, symbol)
+            fill = self._close_position(symbol, pos.quantity, price, ts)
             reason = "stop-loss" if price <= pos.stop_loss else "take-profit"
-            self.log(f"[{symbol}] SALIDA {reason} qty={fill.quantity:.6f} @ {fill.price:.2f}")
+            exit_price = fill.price if fill is not None else price
+            self.log(f"[{symbol}] SALIDA {reason} @ {exit_price:.2f}")
             self._snapshot({symbol: price}, ts)
-            return CycleResult(symbol, "SELL", f"salida {reason} @ {fill.price:.2f}")
+            return CycleResult(symbol, "SELL", f"salida {reason} @ {exit_price:.2f}")
 
         # Veto de IA: solo degrada una COMPRA a HOLD, y solo si puede afectar la ejecución (paper).
         vetoed = verdict is not None and not verdict.confirm
@@ -166,11 +183,11 @@ class Engine:
                     detail = f"compra qty={fill.quantity:.6f} @ {fill.price:.2f}"
                     self.log(f"[{symbol}] COMPRA qty={fill.quantity:.6f} @ {fill.price:.2f}")
         elif signal.action is Action.SELL and pos is not None:
-            fill = self.broker.sell(symbol, pos.quantity, price)
-            self.store.record_fill(self.account, ts, fill)
-            self.store.remove_position(self.account, symbol)
-            detail = f"venta qty={fill.quantity:.6f} @ {fill.price:.2f}"
-            self.log(f"[{symbol}] VENTA qty={fill.quantity:.6f} @ {fill.price:.2f}")
+            fill = self._close_position(symbol, pos.quantity, price, ts)
+            exit_price = fill.price if fill is not None else price
+            exit_qty = fill.quantity if fill is not None else 0.0
+            detail = f"venta qty={exit_qty:.6f} @ {exit_price:.2f}"
+            self.log(f"[{symbol}] VENTA qty={exit_qty:.6f} @ {exit_price:.2f}")
         elif vetoed and self.ai_affects_execution:
             detail = f"compra vetada por IA: {verdict.rationale}"
             self.log(f"[{symbol}] COMPRA vetada por IA: {verdict.rationale}")
