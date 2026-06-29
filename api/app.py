@@ -3,12 +3,15 @@ from __future__ import annotations
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from api.deps import get_config, get_store
+from api.deps import CONFIG_PATH, get_config, get_store
 from api.models import (
     AccountOut,
     CandleOut,
@@ -19,8 +22,10 @@ from api.models import (
     StatusResponse,
     StrategyOut,
 )
-from bot.config import Config
+from bot.accounts import seed_default_accounts
+from bot.config import Config, load_config
 from bot.data.feed import CcxtDataFeed, DataFeed
+from bot.fleet import Fleet
 from bot.store.db import Store
 
 logger = logging.getLogger(__name__)
@@ -59,8 +64,26 @@ def _cors_origins() -> list[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
+def _make_lifespan():
+    @asynccontextmanager
+    async def lifespan(app):
+        fleet = None
+        if os.environ.get("AMERICO_RUN_FLEET", "0") == "1":
+            config = load_config(CONFIG_PATH)
+            store = Store(config.db_path)
+            seed_default_accounts(store)
+            fleet = Fleet(store, config)
+            fleet.start()
+        try:
+            yield
+        finally:
+            if fleet is not None:
+                fleet.stop()
+    return lifespan
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="AMÉRICO API", version="1.0.0")
+    app = FastAPI(title="AMÉRICO API", version="2.0.0", lifespan=_make_lifespan())
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins(),
@@ -194,6 +217,20 @@ def create_app() -> FastAPI:
                 equity=equity_v, cash=cash,
             ))
         return out
+
+    web_dist = os.environ.get("AMERICO_WEB_DIST", "web_dist")
+    assets = os.path.join(web_dist, "assets")
+    index = os.path.join(web_dist, "index.html")
+    if os.path.isdir(web_dist) and os.path.isfile(index):
+        if os.path.isdir(assets):
+            app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+        @app.get("/{full_path:path}")
+        def spa(full_path: str):
+            if full_path.startswith("api/"):
+                from fastapi import HTTPException
+                raise HTTPException(status_code=404)
+            return FileResponse(index)
 
     return app
 
