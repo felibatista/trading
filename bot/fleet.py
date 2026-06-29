@@ -5,7 +5,7 @@ import threading
 from typing import Callable
 
 from bot.broker.paper import LocalPaperBroker
-from bot.cli import ai_affects_execution, build_advisor
+from bot.cli import build_advisor
 from bot.config import Config
 from bot.data.feed import CcxtDataFeed, DataFeed
 from bot.engine.runner import Engine
@@ -52,7 +52,7 @@ class Fleet:
             limit=cfg.limit,
             decider=get_strategy(account["strategy"]),
             advisor=advisor,
-            ai_affects_execution=(ai_on and cfg.broker.kind == "paper"),
+            ai_affects_execution=(ai_on and cfg.ai.enabled and cfg.broker.kind == "paper"),
             account=account["id"],
         )
 

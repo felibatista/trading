@@ -227,7 +227,7 @@ def create_app() -> FastAPI:
 
         @app.get("/{full_path:path}")
         def spa(full_path: str):
-            if full_path.startswith("api/"):
+            if full_path == "api" or full_path.startswith("api/"):
                 from fastapi import HTTPException
                 raise HTTPException(status_code=404)
             return FileResponse(index)
