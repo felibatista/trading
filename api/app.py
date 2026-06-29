@@ -214,6 +214,7 @@ def create_app() -> FastAPI:
                 id=a["id"], name=a["name"], strategy=a["strategy"], symbol=a["symbol"],
                 timeframe=a["timeframe"], interval_seconds=a["interval_seconds"],
                 ai_enabled=a["ai_enabled"], enabled=a["enabled"],
+                starting_cash=a["starting_cash"],
                 equity=equity_v, cash=cash,
             ))
         return out

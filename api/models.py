@@ -78,5 +78,6 @@ class AccountOut(BaseModel):
     interval_seconds: int
     ai_enabled: bool
     enabled: bool
+    starting_cash: float
     equity: float
     cash: float
