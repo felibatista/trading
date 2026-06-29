@@ -155,6 +155,7 @@ class AnthropicAdvisor:
             response = client.messages.create(
                 model=self.model,
                 max_tokens=512,
+                temperature=0,  # determinista: un filtro de veto debe ser reproducible
                 system=SYSTEM_PROMPT,
                 tools=[VERDICT_TOOL],
                 tool_choice={"type": "tool", "name": "emit_verdict"},
@@ -214,6 +215,7 @@ class OpenAIAdvisor:
                 # modelos de razonamiento (o-series) acepten el límite; con holgura para
                 # que alcancen a emitir el tool_call forzado.
                 max_completion_tokens=1024,
+                temperature=0,  # determinista: un filtro de veto debe ser reproducible
                 tools=[OPENAI_VERDICT_TOOL],
                 tool_choice={"type": "function", "function": {"name": "emit_verdict"}},
                 messages=[

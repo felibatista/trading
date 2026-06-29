@@ -21,8 +21,8 @@ def test_resolve_window_from_to_overrides_days():
 
 def test_format_table_sorts_by_return_and_marks_ai():
     results = [
-        BacktestResult("a", "A", "ema_rsi", False, 5.0, 2.0, 0.5, 3, 10500.0, 0.3),
-        BacktestResult("p", "P", "price_action", True, 12.0, 1.0, 0.6, 4, 11200.0, 0.4),
+        BacktestResult("a", "A", "ema_rsi", False, 5.0, 2.0, 0.5, 3, 10500.0, 0.3, 10000.0),
+        BacktestResult("p", "P", "price_action", True, 12.0, 1.0, 0.6, 4, 11200.0, 0.4, 10000.0),
     ]
     out = format_table(results, "7d")
     lines = out.splitlines()

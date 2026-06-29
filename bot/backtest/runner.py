@@ -38,6 +38,7 @@ class BacktestResult:
     num_trades: int
     final_equity: float
     exposure: float
+    starting_cash: float
     equity_curve: list[dict] = field(default_factory=list)
     trades: list[ClosedTrade] = field(default_factory=list)
 
@@ -46,7 +47,7 @@ def _empty_result(account: dict, ai: bool, cash: float) -> BacktestResult:
     return BacktestResult(
         account_id=account["id"], name=account["name"], strategy=account["strategy"],
         ai=ai, return_pct=0.0, max_drawdown_pct=0.0, win_rate=0.0, num_trades=0,
-        final_equity=cash, exposure=0.0,
+        final_equity=cash, exposure=0.0, starting_cash=cash,
     )
 
 
@@ -107,6 +108,17 @@ def run_backtest(
 
     curve = store.equity_series(account["id"], limit=n)
     fills = list(reversed(store.recent_fills(account["id"], limit=n)))  # ascendente
+    # Si queda una posición abierta al final, sintetizamos su cierre al último close
+    # (sin fee de salida) para que num_trades/win_rate reconcilien con la equity
+    # mark-to-market: con esto sum(pnl) == final_equity - starting_cash siempre.
+    open_pos = store.get_positions(account["id"]).get(symbol)
+    if open_pos is not None:
+        # Precio de marca: la última vela operada es la penúltima del df (la última hace de
+        # "vela en formación" y se descarta), igual que el snapshot de equity final.
+        mark_close = float(candles["close"].iloc[-2])
+        fills.append({
+            "side": "SELL", "quantity": open_pos.quantity, "price": mark_close, "fee": 0.0,
+        })
     trades = closed_trades(fills)
     final_equity = curve[-1]["equity"] if curve else cash
     store.close()
@@ -122,6 +134,7 @@ def run_backtest(
         num_trades=len(trades),
         final_equity=final_equity,
         exposure=(bars_in_position / traded_bars) if traded_bars else 0.0,
+        starting_cash=cash,
         equity_curve=curve,
         trades=trades,
     )

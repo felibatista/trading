@@ -39,12 +39,34 @@ class StubAdvisor:
         return AIVerdict(confirm=self._confirm, confidence=1.0, rationale="stub", ai_used=True)
 
 
+def _reconciles(res) -> bool:
+    # Invariante: la suma del PnL de los trades == ganancia de la equity (incluida la
+    # posición abierta al final, que se cierra sintéticamente al precio de marca).
+    pnl = sum(t.pnl for t in res.trades)
+    return abs(pnl - (res.final_equity - res.starting_cash)) < 1e-6
+
+
 def test_run_backtest_without_ai_trades():
     res = run_backtest(_SCALPER, _osc_df(120), risk=RiskParams(), warmup=10, limit=50)
     assert res.ai is False
     assert res.num_trades >= 1            # la sierra dispara entradas + salidas por SL/TP
     assert res.exposure > 0.0
     assert len(res.equity_curve) > 0
+    assert res.starting_cash == 10000.0
+    assert _reconciles(res)               # métricas de trades coherentes con la equity
+
+
+def test_metrics_reconcile_with_open_position():
+    # Serie que baja y repunta al final: abre una compra cerca del cierre y termina EN
+    # posición. El cierre sintético hace que sum(pnl) == final_equity - starting_cash.
+    closes = [100.0 - i * 0.5 for i in range(36)] + [82.5, 83.6, 84.8, 86.0]
+    df = pd.DataFrame({
+        "timestamp": pd.to_datetime(range(len(closes)), unit="m", utc=True),
+        "open": closes, "high": [c + 0.5 for c in closes],
+        "low": [c - 0.5 for c in closes], "close": closes, "volume": [1.0] * len(closes),
+    })
+    res = run_backtest(_SCALPER, df, risk=RiskParams(), warmup=10, limit=50)
+    assert _reconciles(res)
 
 
 def test_ai_veto_blocks_all_entries():
@@ -62,6 +84,7 @@ def test_ai_confirm_allows_trades():
     res = run_backtest(_SCALPER, _osc_df(120), risk=RiskParams(), advisor=ok, warmup=10, limit=50)
     assert res.ai is True and ok.calls >= 1
     assert res.num_trades >= 1             # confirmó: opera como sin IA
+    assert _reconciles(res)
 
 
 def test_fleet_applies_ai_only_to_price_action():

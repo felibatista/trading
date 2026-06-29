@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -65,12 +66,17 @@ def get_candle_feed(config: Config = Depends(get_config)) -> DataFeed:
 
 
 # ── Backtest ────────────────────────────────────────────────────────────────
-# Exchange ccxt (singleton lazy) para el fetch histórico, y cache de velas por
-# (símbolo, timeframe, ventana redondeada a 5') para que re-correr sea rápido.
-# Ambos override-ables para tests vía set_backtest_exchange / dependency_overrides.
+# Exchange ccxt (singleton lazy) para el fetch histórico, y cache LRU de velas por
+# (símbolo, timeframe, ventana redondeada a 5') para que re-correr sea rápido sin
+# crecer sin límite. Ambos override-ables para tests.
 _backtest_exchange = None
 _BACKTEST_BUCKET_MS = 300_000
+_BACKTEST_CACHE_MAX = 16                       # tope de entradas (acota la RAM)
+_BACKTEST_MAX_SPAN_MS = 31 * 86_400_000        # ventana máxima permitida (≈ presets del panel)
 _backtest_cache: dict[tuple, object] = {}
+# Single-flight: un solo backtest a la vez para no saturar el threadpool del server
+# (cada uno es pesado y síncrono). Requests concurrentes reciben 409 al toque.
+_backtest_lock = threading.Lock()
 
 
 def set_backtest_exchange(exchange) -> None:
@@ -96,6 +102,8 @@ def get_backtest_advisor_factory():
 def _cached_candles(exchange, symbol: str, timeframe: str, since_ms: int, until_ms: int):
     key = (symbol, timeframe, since_ms // _BACKTEST_BUCKET_MS, until_ms // _BACKTEST_BUCKET_MS)
     if key not in _backtest_cache:
+        if len(_backtest_cache) >= _BACKTEST_CACHE_MAX:
+            _backtest_cache.pop(next(iter(_backtest_cache)))  # evicta la más vieja (FIFO)
         _backtest_cache[key] = load_ohlcv_range(exchange, symbol, timeframe, since_ms, until_ms)
     return _backtest_cache[key]
 
@@ -318,24 +326,35 @@ def create_app() -> FastAPI:
         accounts = [{**a, "symbol": symbol} for a in DEFAULT_ACCOUNTS]
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         since_ms, until_ms = resolve_window(now_ms, days=req.days, from_=req.from_, to=req.to)
-        tfs = sorted({a["timeframe"] for a in accounts})
+        if until_ms <= since_ms:
+            raise HTTPException(status_code=422, detail="la fecha 'hasta' debe ser mayor que 'desde'")
+        if until_ms - since_ms > _BACKTEST_MAX_SPAN_MS:
+            raise HTTPException(status_code=422, detail="ventana demasiado grande (máx ~31 días)")
+        # Single-flight: rechazá al toque si ya hay uno corriendo (no encolar, no saturar).
+        if not _backtest_lock.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="ya hay un backtest en curso, probá de nuevo")
         try:
-            candles_by_tf = {
-                tf: _cached_candles(exchange, symbol, tf, since_ms, until_ms) for tf in tfs
-            }
-        except Exception as exc:  # noqa: BLE001 - error claro en vez de 500 crudo
-            raise HTTPException(status_code=502, detail=f"no se pudieron bajar datos: {exc}")
-        results = run_fleet_backtest(
-            accounts, candles_by_tf, risk=config.risk,
-            fee_rate=config.broker.fee_rate, slippage=config.broker.slippage,
-            advisor_factory=advisor_factory,
-        )
+            tfs = sorted({a["timeframe"] for a in accounts})
+            try:
+                candles_by_tf = {
+                    tf: _cached_candles(exchange, symbol, tf, since_ms, until_ms) for tf in tfs
+                }
+            except Exception as exc:  # noqa: BLE001 - error claro en vez de 500 crudo
+                raise HTTPException(status_code=502, detail=f"no se pudieron bajar datos: {exc}")
+            results = run_fleet_backtest(
+                accounts, candles_by_tf, risk=config.risk,
+                fee_rate=config.broker.fee_rate, slippage=config.broker.slippage,
+                advisor_factory=advisor_factory,
+            )
+        finally:
+            _backtest_lock.release()
         return [
             BacktestResultOut(
                 account_id=r.account_id, name=r.name, strategy=r.strategy, ai=r.ai,
                 return_pct=r.return_pct, max_drawdown_pct=r.max_drawdown_pct,
                 win_rate=r.win_rate, num_trades=r.num_trades, final_equity=r.final_equity,
-                exposure=r.exposure, equity_curve=_downsample_curve(r.equity_curve),
+                exposure=r.exposure, starting_cash=r.starting_cash,
+                equity_curve=_downsample_curve(r.equity_curve),
             )
             for r in results
         ]

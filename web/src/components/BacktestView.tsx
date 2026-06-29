@@ -42,18 +42,19 @@ export function BacktestView() {
 
   const ranked = results ? [...results].sort((a, b) => b.return_pct - a.return_pct) : []
 
-  // Curva de equity por estrategia, alineada por índice (los timeframes difieren),
-  // en P&L % sobre el capital inicial de cada cuenta.
-  const maxLen = Math.max(0, ...ranked.map((r) => r.equity_curve.length))
-  const chartData = Array.from({ length: maxLen }, (_, i) => {
-    const row: Record<string, number | null> = { i }
-    for (const r of ranked) {
-      const pts = r.equity_curve
-      const base = pts[0]?.equity || 10000
-      row[r.account_id] = pts[i] ? (pts[i].equity / base - 1) * 100 : null
+  // Curva de equity por estrategia, alineada por TIEMPO (los timeframes difieren, así que
+  // alinear por índice sería engañoso). P&L % sobre el capital inicial de cada cuenta.
+  const rowsByMs = new Map<number, Record<string, number | null>>()
+  for (const r of ranked) {
+    const base = r.starting_cash || 10000
+    for (const p of r.equity_curve) {
+      const ms = new Date(p.ts).getTime()
+      let row = rowsByMs.get(ms)
+      if (!row) { row = { ms }; rowsByMs.set(ms, row) }
+      row[r.account_id] = (p.equity / base - 1) * 100
     }
-    return row
-  })
+  }
+  const chartData = [...rowsByMs.values()].sort((a, b) => (a.ms as number) - (b.ms as number))
 
   return (
     <div className="space-y-6">
@@ -147,16 +148,20 @@ export function BacktestView() {
             </div>
 
             <div className="mt-6 h-72 w-full">
-              {maxLen === 0 ? (
+              {chartData.length === 0 ? (
                 <p className="pt-8 text-center text-sm text-zinc-400">Sin datos en la ventana.</p>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f4" />
-                    <XAxis dataKey="i" tick={{ fontSize: 11, fill: '#a1a1aa' }} />
+                    <XAxis dataKey="ms" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                           tick={{ fontSize: 11, fill: '#a1a1aa' }}
+                           tickFormatter={(v) => new Date(Number(v)).toLocaleDateString()} />
                     <YAxis tick={{ fontSize: 11, fill: '#a1a1aa' }} width={48}
                            tickFormatter={(v) => `${Number(v).toFixed(1)}%`} />
-                    <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} />
+                    <Tooltip
+                      labelFormatter={(v) => new Date(Number(v)).toLocaleString()}
+                      formatter={(v) => (v == null ? null : `${fixed(Number(v), 2)}%`)} />
                     <Legend />
                     {ranked.map((r, idx) => (
                       <Line key={r.account_id} type="monotone" dataKey={r.account_id} name={r.strategy}

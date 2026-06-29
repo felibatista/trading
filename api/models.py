@@ -132,6 +132,19 @@ class BacktestRequest(BaseModel):
     to: str | None = None
     symbol: str | None = None
 
+    @field_validator("from_", "to")
+    @classmethod
+    def _v_date(cls, v: str | None) -> str | None:
+        # Valida acá (→ 422 limpio) en vez de explotar en resolve_window (→ 500 crudo).
+        if v is not None:
+            import pandas as pd
+
+            try:
+                pd.Timestamp(v)
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError(f"fecha inválida: {v!r}") from exc
+        return v
+
 
 class BacktestPoint(BaseModel):
     ts: str
@@ -149,4 +162,5 @@ class BacktestResultOut(BaseModel):
     num_trades: int
     final_equity: float
     exposure: float
+    starting_cash: float
     equity_curve: list[BacktestPoint] = Field(default_factory=list)

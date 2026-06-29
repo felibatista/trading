@@ -97,6 +97,7 @@ export interface BacktestResult {
   num_trades: number
   final_equity: number
   exposure: number
+  starting_cash: number
   equity_curve: BacktestPoint[]
 }
 

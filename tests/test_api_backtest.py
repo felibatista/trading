@@ -57,4 +57,21 @@ def test_backtest_endpoint_returns_five_results_ai_only_price_action():
 def test_backtest_accepts_from_to_alias():
     r = _client().post("/api/backtest", json={"from": "2026-06-01", "to": "2026-06-02"})
     assert r.status_code == 200
-    assert len(r.json()) == 5
+    body = r.json()
+    assert len(body) == 5
+    assert all("starting_cash" in x for x in body)
+
+
+def test_backtest_rejects_invalid_date():
+    r = _client().post("/api/backtest", json={"from": "ayer", "to": "2026-06-02"})
+    assert r.status_code == 422  # validado en el modelo, no 500 crudo
+
+
+def test_backtest_rejects_oversized_window():
+    r = _client().post("/api/backtest", json={"from": "2020-01-01", "to": "2026-06-02"})
+    assert r.status_code == 422  # ventana > ~31 días
+
+
+def test_backtest_rejects_inverted_window():
+    r = _client().post("/api/backtest", json={"from": "2026-06-10", "to": "2026-06-01"})
+    assert r.status_code == 422
