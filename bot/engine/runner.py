@@ -35,13 +35,13 @@ class Engine:
         feed: DataFeed,
         broker: Broker,
         store: Store,
-        strategy: StrategyParams,
+        strategy: object,
         risk: RiskParams,
         timeframe: str = "1h",
         limit: int = 200,
         clock: Callable[[], str] = _utcnow,
         log: Callable[[str], None] = print,
-        decider: Callable[[pd.DataFrame, StrategyParams], Signal] = evaluate,
+        decider: Callable[[pd.DataFrame, object], Signal] = evaluate,
         advisor: AIAdvisor | None = None,
         ai_affects_execution: bool = False,
         account: str = "default",
@@ -99,6 +99,10 @@ class Engine:
 
     def run_cycle(self, symbol: str) -> CycleResult:
         df = drop_forming_candle(self.feed.fetch_ohlcv(symbol, self.timeframe, self.limit))
+        if len(df) < 2:
+            ts = self.clock()
+            self.log(f"[{symbol}] HOLD: datos insuficientes ({len(df)} velas)")
+            return CycleResult(symbol, "HOLD", "datos insuficientes")
         price = float(df["close"].iloc[-1])
         signal = self.decider(df, self.strategy)
         ts = self.clock()
