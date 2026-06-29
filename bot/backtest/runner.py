@@ -82,7 +82,9 @@ def run_backtest(
     if n <= warmup + 1:
         return _empty_result(account, ai, cash)
 
-    store = Store(":memory:")
+    # use_env_url=False: DB efímera en memoria SIEMPRE. Sin esto, con DATABASE_URL seteada
+    # (producción), el backtest escribiría en la base real y contaminaría las cuentas vivas.
+    store = Store(":memory:", use_env_url=False)
     broker = LocalPaperBroker(cash, fee_rate, slippage)
     feed = HistoricalFeed(candles)
     ts_holder: dict[str, str] = {"ts": ""}

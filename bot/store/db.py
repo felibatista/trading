@@ -9,8 +9,10 @@ from bot.store.schema import accounts, decisions, equity, fills, metadata, posit
 
 
 class Store:
-    def __init__(self, target: str = ":memory:") -> None:
-        self._engine = make_engine(target)
+    def __init__(self, target: str = ":memory:", *, use_env_url: bool = True) -> None:
+        # use_env_url=False fuerza la DB de `target` (p. ej. :memory:) ignorando
+        # DATABASE_URL: clave para que el backtest NO escriba en producción.
+        self._engine = make_engine(target, use_env_url=use_env_url)
         metadata.create_all(self._engine)
         self._migrate_legacy()
         self._migrate_accounts()

@@ -56,6 +56,14 @@ def test_run_backtest_without_ai_trades():
     assert _reconciles(res)               # métricas de trades coherentes con la equity
 
 
+def test_run_backtest_never_touches_database_url(monkeypatch):
+    # CRÍTICO: con DATABASE_URL seteada (producción), el backtest debe correr en memoria
+    # y NO conectarse a esa base. Una URL inalcanzable haría fallar la conexión si se usara.
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://bad:bad@127.0.0.1:1/none")
+    res = run_backtest(_SCALPER, _osc_df(120), risk=RiskParams(), warmup=10, limit=50)
+    assert res.num_trades >= 1  # corrió de verdad, sin tocar la URL de producción
+
+
 def test_metrics_reconcile_with_open_position():
     # Serie que baja y repunta al final: abre una compra cerca del cierre y termina EN
     # posición. El cierre sintético hace que sum(pnl) == final_equity - starting_cash.
