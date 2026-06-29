@@ -27,6 +27,14 @@ def test_account_crud():
     s.close()
 
 
+def test_store_use_env_url_false_ignores_database_url(monkeypatch):
+    # Aislamiento del backtest: Store(:memory:, use_env_url=False) NO debe usar DATABASE_URL.
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://x:y@127.0.0.1:1/none")
+    s = Store(":memory:", use_env_url=False)
+    assert s._engine.dialect.name == "sqlite"  # corre en memoria, no en Postgres
+    s.close()
+
+
 def test_account_ai_provider_model_round_trip():
     s = Store(":memory:")
     s.upsert_account("o", "OpenAI acct", "ema_rsi", "BTC/USDT", "1m", 12,
