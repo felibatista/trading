@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Settings } from 'lucide-react'
 import { AccountBar } from '@/components/AccountBar'
+import { AccountConfig } from '@/components/AccountConfig'
 import { ComparisonChart } from '@/components/ComparisonChart'
 import { ActivityLog } from '@/components/ActivityLog'
 import { EquityChart } from '@/components/EquityChart'
@@ -11,6 +12,7 @@ import { LivePriceChart } from '@/components/LivePriceChart'
 import { NextRunCard } from '@/components/NextRunCard'
 import { PositionsTable } from '@/components/PositionsTable'
 import { TopBar } from '@/components/TopBar'
+import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { usePolling } from '@/lib/use-polling'
 
@@ -21,6 +23,8 @@ export default function App() {
   const accounts = usePolling(useCallback(() => api.getAccounts(), []), SLOW_INTERVAL)
   const accountList = accounts.data ?? []
   const [account, setAccount] = useState<string | null>(null)
+  const [configOpen, setConfigOpen] = useState(false)
+  const selectedAccount = accountList.find((a) => a.id === account) ?? null
 
   // Selección inicial: primera cuenta cuando llega la lista.
   useEffect(() => {
@@ -29,12 +33,12 @@ export default function App() {
 
   const acc = account ?? undefined
 
-  const status = usePolling(useCallback(() => api.getStatus(acc), [acc]), LIVE_INTERVAL, [account])
-  const candles = usePolling(useCallback(() => api.getCandles(undefined, undefined, 120, acc), [acc]), LIVE_INTERVAL, [account])
-  const decisions = usePolling(useCallback(() => api.getDecisions(20, acc), [acc]), LIVE_INTERVAL, [account])
-  const positions = usePolling(useCallback(() => api.getPositions(acc), [acc]), LIVE_INTERVAL, [account])
-  const equity = usePolling(useCallback(() => api.getEquity(200, acc), [acc]), SLOW_INTERVAL, [account])
-  const fills = usePolling(useCallback(() => api.getFills(50, acc), [acc]), SLOW_INTERVAL, [account])
+  const status = usePolling(useCallback(() => acc ? api.getStatus(acc) : Promise.resolve(null), [acc]), LIVE_INTERVAL, [account])
+  const candles = usePolling(useCallback(() => acc ? api.getCandles(undefined, undefined, 120, acc) : Promise.resolve([]), [acc]), LIVE_INTERVAL, [account])
+  const decisions = usePolling(useCallback(() => acc ? api.getDecisions(20, acc) : Promise.resolve([]), [acc]), LIVE_INTERVAL, [account])
+  const positions = usePolling(useCallback(() => acc ? api.getPositions(acc) : Promise.resolve([]), [acc]), LIVE_INTERVAL, [account])
+  const equity = usePolling(useCallback(() => acc ? api.getEquity(200, acc) : Promise.resolve([]), [acc]), SLOW_INTERVAL, [account])
+  const fills = usePolling(useCallback(() => acc ? api.getFills(50, acc) : Promise.resolve([]), [acc]), SLOW_INTERVAL, [account])
 
   const series = equity.data ?? []
   const decisionList = decisions.data ?? []
@@ -61,7 +65,21 @@ export default function App() {
         )}
 
         {accountList.length > 0 && (
-          <AccountBar accounts={accountList} selected={account} onSelect={setAccount} />
+          <div className="flex items-center justify-between gap-3">
+            <AccountBar accounts={accountList} selected={account} onSelect={setAccount} />
+            {selectedAccount && (
+              <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+                <Settings className="h-4 w-4" /> Config
+              </Button>
+            )}
+          </div>
+        )}
+        {configOpen && selectedAccount && (
+          <AccountConfig
+            account={selectedAccount}
+            onClose={() => setConfigOpen(false)}
+            onSaved={() => {}}
+          />
         )}
 
         {accountList.length > 1 && <ComparisonChart accounts={accountList} />}

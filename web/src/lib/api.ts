@@ -37,4 +37,17 @@ export const api = {
     ids.forEach((id, i) => { out[id] = series[i] })
     return out
   },
+  updateAccount: async (id: string, patch: Record<string, unknown>): Promise<Account> => {
+    const res = await fetch(`${BASE}/api/accounts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try { const j = await res.json(); detail = JSON.stringify(j.detail ?? j) } catch { /* noop */ }
+      throw new Error(detail)
+    }
+    return (await res.json()) as Account
+  },
 }
