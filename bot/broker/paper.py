@@ -4,11 +4,17 @@ from bot.broker.models import Fill, Side
 
 
 class LocalPaperBroker:
-    def __init__(self, cash: float, fee_rate: float = 0.001, slippage: float = 0.0005) -> None:
+    def __init__(
+        self,
+        cash: float,
+        fee_rate: float = 0.001,
+        slippage: float = 0.0005,
+        holdings: dict[str, float] | None = None,
+    ) -> None:
         self._cash = float(cash)
         self.fee_rate = fee_rate
         self.slippage = slippage
-        self._holdings: dict[str, float] = {}
+        self._holdings: dict[str, float] = dict(holdings) if holdings else {}
 
     def cash(self) -> float:
         return self._cash

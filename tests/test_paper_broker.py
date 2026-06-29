@@ -34,3 +34,10 @@ def test_sell_without_position_raises():
     b = LocalPaperBroker(cash=10000.0)
     with pytest.raises(ValueError):
         b.sell("BTC/USDT", 1.0, ref_price=100.0)
+
+
+def test_initial_holdings_are_restored():
+    b = LocalPaperBroker(cash=9000.0, holdings={"BTC/USDT": 0.5})
+    assert b.holdings("BTC/USDT") == 0.5
+    b.sell("BTC/USDT", 0.5, ref_price=100.0)
+    assert abs(b.holdings("BTC/USDT")) < 1e-12

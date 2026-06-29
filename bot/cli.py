@@ -21,7 +21,7 @@ def run_decide(
     return evaluate(df, config.strategy)
 
 
-def build_broker(config: Config) -> Broker:
+def build_broker(config: Config, store: Store | None = None) -> Broker:
     bp = config.broker
     if bp.kind == "okx_demo":
         return OkxDemoBroker(
@@ -29,7 +29,18 @@ def build_broker(config: Config) -> Broker:
             os.environ["OKX_API_SECRET"],
             os.environ["OKX_API_PASSWORD"],
         )
-    return LocalPaperBroker(bp.paper_cash, bp.fee_rate, bp.slippage)
+    if bp.kind != "paper":
+        raise ValueError(f"Broker desconocido: {bp.kind!r}")
+    cash = bp.paper_cash
+    holdings: dict[str, float] | None = None
+    if store is not None:
+        eq = store.latest_equity()
+        if eq is not None:
+            cash = eq[1]
+        positions = store.get_positions()
+        if positions:
+            holdings = {sym: p.quantity for sym, p in positions.items()}
+    return LocalPaperBroker(cash, bp.fee_rate, bp.slippage, holdings=holdings)
 
 
 def _cmd_decide(args) -> int:
@@ -54,10 +65,11 @@ def _cmd_run(args) -> int:
     config = load_config(args.config)
     exchange = args.exchange or config.exchange
     timeframe = args.timeframe or config.timeframe
+    store = Store(config.db_path)
     engine = Engine(
         feed=CcxtDataFeed(exchange),
-        broker=build_broker(config),
-        store=Store(config.db_path),
+        broker=build_broker(config, store),
+        store=store,
         strategy=config.strategy,
         risk=config.risk,
         timeframe=timeframe,
@@ -66,9 +78,13 @@ def _cmd_run(args) -> int:
     if args.loop:
         print(f"Loop cada {config.loop_interval_seconds}s · {config.broker.kind} · {exchange}")
         engine.run_loop([args.symbol], config.loop_interval_seconds)
-    else:
+        return 0
+    try:
         result = engine.run_cycle(args.symbol)
         print(f"[{result.symbol}] {result.action}: {result.detail}")
+    except Exception as exc:  # noqa: BLE001 - mostrar error limpio en vez de traceback
+        print(f"Error en el ciclo: {exc}")
+        return 1
     return 0
 
 
