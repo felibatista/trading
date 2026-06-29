@@ -136,6 +136,7 @@ def _result_to_out(r) -> BacktestResultOut:
         return_pct=r.return_pct, max_drawdown_pct=r.max_drawdown_pct,
         win_rate=r.win_rate, num_trades=r.num_trades, final_equity=r.final_equity,
         exposure=r.exposure, starting_cash=r.starting_cash,
+        sharpe=r.sharpe, profit_factor=r.profit_factor,
         equity_curve=_downsample_curve(r.equity_curve),
     )
 

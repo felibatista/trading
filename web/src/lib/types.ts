@@ -98,6 +98,8 @@ export interface BacktestResult {
   final_equity: number
   exposure: number
   starting_cash: number
+  sharpe: number
+  profit_factor: number | null
   equity_curve: BacktestPoint[]
 }
 

@@ -124,6 +124,8 @@ export function BacktestView() {
                     <th className="py-2 px-3 text-right font-medium">Retorno</th>
                     <th className="py-2 px-3 text-right font-medium">Max DD</th>
                     <th className="py-2 px-3 text-right font-medium">Win</th>
+                    <th className="py-2 px-3 text-right font-medium">Sharpe</th>
+                    <th className="py-2 px-3 text-right font-medium">PF</th>
                     <th className="py-2 px-3 text-right font-medium">Trades</th>
                     <th className="py-2 px-3 text-right font-medium">Equity final</th>
                   </tr>
@@ -145,6 +147,12 @@ export function BacktestView() {
                       </td>
                       <td className="py-2 px-3 text-right font-mono tabular-nums text-zinc-600">
                         {fixed(r.win_rate * 100, 1)}%
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums text-zinc-600">
+                        {fixed(r.sharpe, 2)}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono tabular-nums text-zinc-600">
+                        {r.profit_factor == null ? (r.num_trades > 0 ? '∞' : '—') : fixed(r.profit_factor, 2)}
                       </td>
                       <td className="py-2 px-3 text-right font-mono tabular-nums text-zinc-600">
                         {r.num_trades}

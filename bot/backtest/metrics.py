@@ -64,3 +64,38 @@ def win_rate(trades: list[ClosedTrade]) -> float:
         return 0.0
     wins = sum(1 for t in trades if t.pnl > 0)
     return wins / len(trades)
+
+
+def returns_from_curve(curve: list[dict]) -> list[float]:
+    """Retornos simples punto a punto de la curva de equity."""
+    rets: list[float] = []
+    for i in range(1, len(curve)):
+        prev = curve[i - 1]["equity"]
+        if prev > 0:
+            rets.append(curve[i]["equity"] / prev - 1.0)
+    return rets
+
+
+def sharpe_ratio(curve: list[dict], periods_per_year: float) -> float:
+    """Sharpe ANUALIZADO (risk-free 0) sobre los retornos por período de la equity.
+    Anualizar es lo que hace comparables estrategias en timeframes distintos.
+    0.0 si no hay suficientes datos o el desvío es nulo."""
+    rets = returns_from_curve(curve)
+    n = len(rets)
+    if n < 2:
+        return 0.0
+    mean = sum(rets) / n
+    var = sum((r - mean) ** 2 for r in rets) / (n - 1)  # desvío muestral
+    if var <= 0:
+        return 0.0
+    return (mean / var ** 0.5) * (periods_per_year ** 0.5)
+
+
+def profit_factor(trades: list[ClosedTrade]) -> float | None:
+    """Ganancia bruta / pérdida bruta de los trades cerrados. None = sin pérdidas
+    (PF indefinido / ∞) o sin trades; el caller lo distingue por num_trades."""
+    gross_win = sum(t.pnl for t in trades if t.pnl > 0)
+    gross_loss = -sum(t.pnl for t in trades if t.pnl < 0)
+    if gross_loss <= 0:
+        return None
+    return gross_win / gross_loss

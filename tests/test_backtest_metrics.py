@@ -4,6 +4,8 @@ from bot.backtest.metrics import (
     ClosedTrade,
     closed_trades,
     max_drawdown_pct,
+    profit_factor,
+    sharpe_ratio,
     total_return_pct,
     win_rate,
 )
@@ -56,3 +58,22 @@ def test_win_rate():
     ]
     assert round(win_rate(trades), 4) == round(2 / 3, 4)
     assert win_rate([]) == 0.0
+
+
+def test_profit_factor():
+    trades = [ClosedTrade(1, 100, 110, 10.0), ClosedTrade(1, 100, 95, -5.0),
+              ClosedTrade(1, 100, 90, -5.0)]
+    assert profit_factor(trades) == 1.0          # 10 / (5+5)
+    assert profit_factor([]) is None              # sin trades
+    assert profit_factor([ClosedTrade(1, 100, 110, 8.0)]) is None  # sin pérdidas → ∞
+
+
+def test_sharpe_ratio():
+    assert sharpe_ratio([], 252) == 0.0
+    assert sharpe_ratio(_curve(100), 252) == 0.0  # un punto, sin retornos
+    # equity que sube de forma constante (retorno por período constante) → desvío 0 → 0.0
+    assert sharpe_ratio(_curve(100, 110, 121), 252) == 0.0
+    # con varianza, Sharpe positivo y escala con sqrt(periods_per_year)
+    up = sharpe_ratio(_curve(100, 101, 100.5, 102, 101.5, 103), 252)
+    assert up > 0
+    assert sharpe_ratio(_curve(100, 90, 95, 85, 80), 252) < 0  # tendencia bajista

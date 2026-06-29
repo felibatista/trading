@@ -6,14 +6,19 @@ from typing import Callable
 import pandas as pd
 
 from bot.ai.advisor import AIAdvisor
+from bot.backtest.data import timeframe_to_ms
 from bot.backtest.feed import HistoricalFeed
 from bot.backtest.metrics import (
     ClosedTrade,
     closed_trades,
     max_drawdown_pct,
+    profit_factor,
+    sharpe_ratio,
     total_return_pct,
     win_rate,
 )
+
+_YEAR_MS = 365.25 * 86_400_000  # cripto opera 24/7: año calendario para anualizar Sharpe
 from bot.broker.paper import LocalPaperBroker
 from bot.config import RiskParams
 from bot.engine.runner import Engine
@@ -39,6 +44,8 @@ class BacktestResult:
     final_equity: float
     exposure: float
     starting_cash: float
+    sharpe: float = 0.0
+    profit_factor: float | None = None
     equity_curve: list[dict] = field(default_factory=list)
     trades: list[ClosedTrade] = field(default_factory=list)
 
@@ -135,6 +142,8 @@ def run_backtest(
         final_equity=final_equity,
         exposure=(bars_in_position / traded_bars) if traded_bars else 0.0,
         starting_cash=cash,
+        sharpe=sharpe_ratio(curve, _YEAR_MS / timeframe_to_ms(account["timeframe"])),
+        profit_factor=profit_factor(trades),
         equity_curve=curve,
         trades=trades,
     )

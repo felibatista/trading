@@ -163,6 +163,8 @@ class BacktestResultOut(BaseModel):
     final_equity: float
     exposure: float
     starting_cash: float
+    sharpe: float
+    profit_factor: float | None = None
     equity_curve: list[BacktestPoint] = Field(default_factory=list)
 
 
