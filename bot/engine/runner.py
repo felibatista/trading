@@ -71,7 +71,9 @@ class Engine:
         ind = signal.indicators
         self.store.record_decision(
             ts, symbol, signal.action.value, signal.reason,
-            ind["ema_fast"], ind["ema_slow"], ind["rsi"],
+            ind.get("ema_fast", float("nan")),
+            ind.get("ema_slow", float("nan")),
+            ind.get("rsi", float("nan")),
         )
 
         positions = self.store.get_positions()
