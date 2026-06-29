@@ -1,0 +1,50 @@
+# Stack completo de AMÉRICO para Docker / Coolify:
+#   bot  -> worker que opera en paper y escribe el estado (SQLite)
+#   api  -> FastAPI de solo lectura sobre el mismo SQLite
+#   web  -> nginx que sirve el panel y proxea /api -> api:8000 (servicio público)
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: americo-app:latest
+    command: python -m bot run ${BOT_SYMBOL:-BTC/USDT} --loop --config config.docker.yaml
+    environment:
+      PYTHONUNBUFFERED: "1"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OKX_API_KEY: ${OKX_API_KEY:-}
+      OKX_API_SECRET: ${OKX_API_SECRET:-}
+      OKX_API_PASSWORD: ${OKX_API_PASSWORD:-}
+    volumes:
+      - americo-data:/data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: americo-app:latest
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000
+    environment:
+      PYTHONUNBUFFERED: "1"
+      AMERICO_CONFIG: config.docker.yaml
+      AMERICO_CORS_ORIGINS: ${AMERICO_CORS_ORIGINS:-*}
+    volumes:
+      - americo-data:/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: americo-web:latest
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  americo-data:

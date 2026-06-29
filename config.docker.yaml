@@ -1,0 +1,32 @@
+# Configuración de producción para el deploy con Docker / Coolify.
+# El bot y la API leen este archivo; la DB vive en el volumen compartido /data.
+exchange: okx
+timeframe: "1h"
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+limit: 200
+db_path: /data/americo.sqlite
+loop_interval_seconds: 3600
+strategy:
+  fast: 20
+  slow: 50
+  rsi_period: 14
+  rsi_oversold: 35
+  rsi_overbought: 70
+broker:
+  kind: paper          # paper | okx_demo (okx_demo necesita OKX_API_KEY/SECRET/PASSWORD)
+  paper_cash: 10000
+  fee_rate: 0.001
+  slippage: 0.0005
+risk:
+  risk_per_trade: 0.01
+  stop_loss_pct: 0.02
+  take_profit_pct: 0.04
+  max_exposure_pct: 0.30
+  max_positions: 3
+ai:
+  enabled: false       # poné true + ANTHROPIC_API_KEY en el entorno para activar el filtro IA
+  model: claude-haiku-4-5
+  timeout_seconds: 20
+  max_retries: 1

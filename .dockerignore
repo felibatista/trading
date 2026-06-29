@@ -1,0 +1,14 @@
+.venv/
+**/__pycache__/
+*.pyc
+.git/
+.github/
+.pytest_cache/
+*.sqlite
+web/
+docs/
+tests/
+.env
+config-private.yaml
+*.md
+.claude/
