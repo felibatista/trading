@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+_STRATS = {"ema_rsi", "macd", "bollinger", "breakout", "price_action"}
+_TFS = {"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"}
 
 
 class StrategyOut(BaseModel):
@@ -81,3 +84,29 @@ class AccountOut(BaseModel):
     starting_cash: float
     equity: float
     cash: float
+
+
+class AccountUpdate(BaseModel):
+    name: str | None = None
+    strategy: str | None = None
+    symbol: str | None = None
+    timeframe: str | None = None
+    interval_seconds: int | None = Field(default=None, ge=5, le=86400)
+    starting_cash: float | None = Field(default=None, gt=0)
+    ai_enabled: bool | None = None
+    enabled: bool | None = None
+    params: dict | None = None
+
+    @field_validator("strategy")
+    @classmethod
+    def _v_strategy(cls, v: str | None) -> str | None:
+        if v is not None and v not in _STRATS:
+            raise ValueError(f"strategy inválida: {v}")
+        return v
+
+    @field_validator("timeframe")
+    @classmethod
+    def _v_timeframe(cls, v: str | None) -> str | None:
+        if v is not None and v not in _TFS:
+            raise ValueError(f"timeframe inválido: {v}")
+        return v

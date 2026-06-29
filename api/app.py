@@ -6,7 +6,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from api.deps import CONFIG_PATH, get_config, get_store
 from api.models import (
     AccountOut,
+    AccountUpdate,
     CandleOut,
     DecisionOut,
     EquityPoint,
@@ -218,6 +219,29 @@ def create_app() -> FastAPI:
                 equity=equity_v, cash=cash,
             ))
         return out
+
+    @app.put("/api/accounts/{account_id}", response_model=AccountOut)
+    def update_account(
+        account_id: str, patch: AccountUpdate, store: Store = Depends(get_store),
+    ) -> AccountOut:
+        current = store.get_account(account_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail="cuenta no encontrada")
+        data = {**current, **patch.model_dump(exclude_none=True)}
+        store.upsert_account(
+            account_id, data["name"], data["strategy"], data["symbol"],
+            data["timeframe"], data["interval_seconds"], data["starting_cash"],
+            data["ai_enabled"], data["enabled"], data["params"],
+        )
+        eq = store.latest_equity(account_id)
+        equity_v, cash = eq if eq is not None else (data["starting_cash"], data["starting_cash"])
+        return AccountOut(
+            id=account_id, name=data["name"], strategy=data["strategy"],
+            symbol=data["symbol"], timeframe=data["timeframe"],
+            interval_seconds=data["interval_seconds"], ai_enabled=data["ai_enabled"],
+            enabled=data["enabled"], equity=equity_v, cash=cash,
+            starting_cash=data["starting_cash"],
+        )
 
     web_dist = os.environ.get("AMERICO_WEB_DIST", "web_dist")
     assets = os.path.join(web_dist, "assets")
