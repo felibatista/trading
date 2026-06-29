@@ -5,7 +5,8 @@
 .github/
 .pytest_cache/
 *.sqlite
-web/
+web/node_modules/
+web/dist/
 docs/
 tests/
 .env

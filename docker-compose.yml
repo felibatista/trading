@@ -1,52 +1,26 @@
-# Stack completo de AMÉRICO para Docker / Coolify:
-#   bot  -> worker que opera en paper y escribe el estado (SQLite)
-#   api  -> FastAPI de solo lectura sobre el mismo SQLite
-#   web  -> nginx que sirve el panel y proxea /api -> api:8000 (servicio público)
+# Stack de AMÉRICO en UN solo contenedor: API + panel + flota de 5 cuentas.
 services:
-  bot:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: americo-app:latest
-    command: python -m bot run ${BOT_SYMBOL:-BTC/USDT} --loop --config config.docker.yaml
+    image: americo:latest
+    ports:
+      - "${WEB_PORT:-8080}:8000"
     environment:
       PYTHONUNBUFFERED: "1"
+      AMERICO_CONFIG: config.docker.yaml
+      AMERICO_CORS_ORIGINS: ${AMERICO_CORS_ORIGINS:-*}
+      AMERICO_RUN_FLEET: "1"
+      # Opcional: Postgres gestionado de Coolify. Si está, la DB usa Postgres.
+      DATABASE_URL: ${DATABASE_URL:-}
+      # IA (opcional): la veta entradas por cuenta si está la key.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OKX_API_KEY: ${OKX_API_KEY:-}
       OKX_API_SECRET: ${OKX_API_SECRET:-}
       OKX_API_PASSWORD: ${OKX_API_PASSWORD:-}
     volumes:
       - americo-data:/data
-      # Config montada: editás config.docker.yaml y aplicás con `docker compose restart bot api` (sin rebuild).
-      - ./config.docker.yaml:/app/config.docker.yaml:ro
-    restart: unless-stopped
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: americo-app:latest
-    command: uvicorn api.app:app --host 0.0.0.0 --port 8000
-    environment:
-      PYTHONUNBUFFERED: "1"
-      AMERICO_CONFIG: config.docker.yaml
-      AMERICO_CORS_ORIGINS: ${AMERICO_CORS_ORIGINS:-*}
-    volumes:
-      - americo-data:/data
-      - ./config.docker.yaml:/app/config.docker.yaml:ro
-    expose:
-      - "8000"
-    restart: unless-stopped
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    image: americo-web:latest
-    ports:
-      - "${WEB_PORT:-8080}:80"
-    depends_on:
-      - api
     restart: unless-stopped
 
 volumes:
