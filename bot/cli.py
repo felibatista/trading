@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from bot.config import Config, load_config
-from bot.data.feed import CcxtDataFeed, DataFeed
+from bot.data.feed import CcxtDataFeed, DataFeed, drop_forming_candle
 from bot.models import Signal
 from bot.strategy.ema_rsi import evaluate
 
@@ -11,7 +11,7 @@ from bot.strategy.ema_rsi import evaluate
 def run_decide(
     feed: DataFeed, config: Config, symbol: str, timeframe: str, limit: int = 200
 ) -> Signal:
-    df = feed.fetch_ohlcv(symbol, timeframe, limit)
+    df = drop_forming_candle(feed.fetch_ohlcv(symbol, timeframe, limit))
     return evaluate(df, config.strategy)
 
 

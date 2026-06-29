@@ -13,6 +13,10 @@ def ohlcv_to_df(rows: list[list[float]]) -> pd.DataFrame:
     return df
 
 
+def drop_forming_candle(df: pd.DataFrame) -> pd.DataFrame:
+    return df.iloc[:-1]
+
+
 class DataFeed(Protocol):
     def fetch_ohlcv(
         self, symbol: str, timeframe: str, limit: int = 200
