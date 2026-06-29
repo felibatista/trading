@@ -23,11 +23,17 @@ class DataFeed(Protocol):
     ) -> pd.DataFrame: ...
 
 
+def make_ccxt_exchange(exchange_id: str = "okx"):
+    """Construye un exchange de ccxt con rate-limit. Compartido por el feed en vivo y el
+    fetch histórico paginado del backtest."""
+    import ccxt
+
+    return getattr(ccxt, exchange_id)({"enableRateLimit": True})
+
+
 class CcxtDataFeed:
     def __init__(self, exchange_id: str = "okx") -> None:
-        import ccxt
-
-        self._exchange = getattr(ccxt, exchange_id)({"enableRateLimit": True})
+        self._exchange = make_ccxt_exchange(exchange_id)
 
     def fetch_ohlcv(
         self, symbol: str, timeframe: str = "1h", limit: int = 200

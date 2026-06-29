@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import argparse
 import os
+from datetime import datetime, timezone
 
+from bot.accounts import DEFAULT_ACCOUNTS
 from bot.ai.advisor import AIAdvisor, AnthropicAdvisor, NoopAdvisor, OpenAIAdvisor
+from bot.backtest.data import load_ohlcv_range
+from bot.backtest.report import format_table, resolve_window
+from bot.backtest.runner import run_fleet_backtest
 from bot.broker.base import Broker
 from bot.broker.okx_demo import OkxDemoBroker
 from bot.broker.paper import LocalPaperBroker
 from bot.config import Config, load_config
-from bot.data.feed import CcxtDataFeed, DataFeed, drop_forming_candle
+from bot.data.feed import CcxtDataFeed, DataFeed, drop_forming_candle, make_ccxt_exchange
 from bot.engine.runner import Engine
 from bot.models import Signal
 from bot.store.db import Store
@@ -126,6 +131,28 @@ def _cmd_run(args) -> int:
     return 0
 
 
+def _cmd_backtest(args) -> int:
+    config = load_config(args.config)
+    exchange_id = args.exchange or config.exchange
+    symbol = args.symbol or DEFAULT_ACCOUNTS[0]["symbol"]
+    accounts = [{**a, "symbol": symbol} for a in DEFAULT_ACCOUNTS]
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    since_ms, until_ms = resolve_window(now_ms, days=args.days, from_=args.from_, to=args.to)
+    exchange = make_ccxt_exchange(exchange_id)
+    tfs = sorted({a["timeframe"] for a in accounts})
+    print(f"Bajando datos de {exchange_id} para {symbol} ({', '.join(tfs)})…")
+    candles_by_tf = {
+        tf: load_ohlcv_range(exchange, symbol, tf, since_ms, until_ms) for tf in tfs
+    }
+    results = run_fleet_backtest(
+        accounts, candles_by_tf, risk=config.risk,
+        fee_rate=config.broker.fee_rate, slippage=config.broker.slippage,
+    )
+    label = f"{args.days}d" if not (args.from_ or args.to) else f"{args.from_ or '…'}→{args.to or 'hoy'}"
+    print(format_table(results, label))
+    return 0
+
+
 def _cmd_status(args) -> int:
     config = load_config(args.config)
     store = Store(config.db_path)
@@ -170,6 +197,15 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("status", help="Muestra equity, posiciones y últimas decisiones")
     s.add_argument("--config", default="config.yaml")
     s.set_defaults(func=_cmd_status)
+
+    b = sub.add_parser("backtest", help="Backtest de las 5 estrategias sobre histórico")
+    b.add_argument("--days", type=int, default=7, help="Ventana en días (default 7)")
+    b.add_argument("--from", dest="from_", default=None, help="Fecha desde (ISO); pisa --days")
+    b.add_argument("--to", default=None, help="Fecha hasta (ISO); default ahora")
+    b.add_argument("--symbol", default=None)
+    b.add_argument("--exchange", default=None)
+    b.add_argument("--config", default="config.yaml")
+    b.set_defaults(func=_cmd_backtest)
 
     args = parser.parse_args(argv)
     return args.func(args)

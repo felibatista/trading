@@ -133,6 +133,27 @@ def test_openai_advisor_uses_configured_model():
     assert client.calls[0]["model"] == "gpt-4o"
 
 
+def test_openai_advisor_uses_max_completion_tokens():
+    # La API nueva de OpenAI deprecó max_tokens en chat completions y los modelos
+    # o-series lo rechazan; debe mandarse max_completion_tokens.
+    client = FakeOpenAIClient(tool_input={"confirm": True, "confidence": 0.9, "rationale": "ok"})
+    adv = OpenAIAdvisor(model="gpt-4o-mini", client=client, log=lambda m: None)
+    adv.review(ctx())
+    sent = client.calls[0]
+    assert "max_completion_tokens" in sent and "max_tokens" not in sent
+
+
+def test_advisors_pin_temperature_zero():
+    # Determinismo/reproducibilidad: ambos proveedores fijan temperature=0.
+    oc = FakeOpenAIClient(tool_input={"confirm": True, "confidence": 0.9, "rationale": "ok"})
+    OpenAIAdvisor(model="gpt-4o-mini", client=oc, log=lambda m: None).review(ctx())
+    assert oc.calls[0]["temperature"] == 0
+
+    ac = FakeClient(tool_input={"confirm": True, "confidence": 0.9, "rationale": "ok"})
+    AnthropicAdvisor(model="claude-haiku-4-5", client=ac, log=lambda m: None).review(ctx())
+    assert ac.calls[0]["temperature"] == 0
+
+
 def test_openai_advisor_falls_back_to_rules_on_error():
     client = FakeOpenAIClient(raise_exc=RuntimeError("boom"))
     adv = OpenAIAdvisor(model="gpt-4o-mini", client=client, log=lambda m: None)

@@ -74,11 +74,19 @@ class Store:
             return
         cols = {c["name"] for c in insp.get_columns("accounts")}
         for col, default in (("ai_provider", "anthropic"), ("ai_model", "claude-haiku-4-5")):
-            if col not in cols:
+            if col in cols:
+                continue
+            try:
                 with self._engine.begin() as conn:
                     conn.execute(text(
                         f"ALTER TABLE accounts ADD COLUMN {col} TEXT NOT NULL DEFAULT '{default}'"
                     ))
+            except Exception:  # noqa: BLE001 - tolera carrera / migración repetida
+                # Otra instancia pudo agregar la columna entre el inspect y el ALTER (o se
+                # reejecuta la migración): si ya existe es un no-op; si no, es un error real.
+                fresh = {c["name"] for c in inspect(self._engine).get_columns("accounts")}
+                if col not in fresh:
+                    raise
 
     # ---- decisiones ----
     def record_decision(

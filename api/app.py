@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,9 +13,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.deps import CONFIG_PATH, get_config, get_store
+from bot.ai.advisor import DEFAULT_MODEL_BY_PROVIDER
 from api.models import (
     AccountOut,
     AccountUpdate,
+    BacktestPoint,
+    BacktestRequest,
+    BacktestResultOut,
     CandleOut,
     DecisionOut,
     EquityPoint,
@@ -23,9 +28,12 @@ from api.models import (
     StatusResponse,
     StrategyOut,
 )
-from bot.accounts import seed_default_accounts
+from bot.accounts import DEFAULT_ACCOUNTS, seed_default_accounts
+from bot.backtest.data import load_ohlcv_range
+from bot.backtest.report import resolve_window
+from bot.backtest.runner import run_fleet_backtest
 from bot.config import Config, load_config
-from bot.data.feed import CcxtDataFeed, DataFeed
+from bot.data.feed import CcxtDataFeed, DataFeed, make_ccxt_exchange
 from bot.fleet import Fleet
 from bot.store.db import Store
 
@@ -55,6 +63,61 @@ def get_candle_feed(config: Config = Depends(get_config)) -> DataFeed:
     if _candle_feed is None:
         _candle_feed = CcxtDataFeed(exchange_id=config.exchange)
     return _candle_feed
+
+
+# ── Backtest ────────────────────────────────────────────────────────────────
+# Exchange ccxt (singleton lazy) para el fetch histórico, y cache LRU de velas por
+# (símbolo, timeframe, ventana redondeada a 5') para que re-correr sea rápido sin
+# crecer sin límite. Ambos override-ables para tests.
+_backtest_exchange = None
+_BACKTEST_BUCKET_MS = 300_000
+_BACKTEST_CACHE_MAX = 16                       # tope de entradas (acota la RAM)
+_BACKTEST_MAX_SPAN_MS = 31 * 86_400_000        # ventana máxima permitida (≈ presets del panel)
+_backtest_cache: dict[tuple, object] = {}
+# Single-flight: un solo backtest a la vez para no saturar el threadpool del server
+# (cada uno es pesado y síncrono). Requests concurrentes reciben 409 al toque.
+_backtest_lock = threading.Lock()
+
+
+def set_backtest_exchange(exchange) -> None:
+    global _backtest_exchange
+    _backtest_exchange = exchange
+    _backtest_cache.clear()
+
+
+def get_backtest_exchange(config: Config = Depends(get_config)):
+    global _backtest_exchange
+    if _backtest_exchange is None:
+        _backtest_exchange = make_ccxt_exchange(config.exchange)
+    return _backtest_exchange
+
+
+def get_backtest_advisor_factory():
+    # Default: el factory real. Tests lo overridean con un stub determinístico.
+    from bot.cli import make_advisor
+
+    return make_advisor
+
+
+def _cached_candles(exchange, symbol: str, timeframe: str, since_ms: int, until_ms: int):
+    key = (symbol, timeframe, since_ms // _BACKTEST_BUCKET_MS, until_ms // _BACKTEST_BUCKET_MS)
+    if key not in _backtest_cache:
+        if len(_backtest_cache) >= _BACKTEST_CACHE_MAX:
+            _backtest_cache.pop(next(iter(_backtest_cache)))  # evicta la más vieja (FIFO)
+        _backtest_cache[key] = load_ohlcv_range(exchange, symbol, timeframe, since_ms, until_ms)
+    return _backtest_cache[key]
+
+
+def _downsample_curve(curve: list[dict], max_points: int = 300) -> list[BacktestPoint]:
+    if not curve:
+        return []
+    # Muestrea a <= max_points-1 (ceil division) y agrega el último → total <= max_points.
+    target = max(1, max_points - 1)
+    step = max(1, -(-len(curve) // target))
+    sampled = list(curve[::step])
+    if sampled[-1]["ts"] != curve[-1]["ts"]:
+        sampled.append(curve[-1])
+    return [BacktestPoint(ts=p["ts"], equity=p["equity"]) for p in sampled]
 
 
 def _cors_origins() -> list[str]:
@@ -89,7 +152,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=_cors_origins(),
         allow_credentials=False,
-        allow_methods=["GET", "PUT"],
+        allow_methods=["GET", "PUT", "POST"],
         allow_headers=["*"],
     )
 
@@ -228,7 +291,13 @@ def create_app() -> FastAPI:
         current = store.get_account(account_id)
         if current is None:
             raise HTTPException(status_code=404, detail="cuenta no encontrada")
-        data = {**current, **patch.model_dump(exclude_none=True)}
+        pd = patch.model_dump(exclude_none=True)
+        data = {**current, **pd}
+        # Si se cambia de proveedor sin mandar modelo, reseteamos al default del nuevo
+        # (espeja changeProvider del panel): evita un par provider/model incompatible que
+        # dejaría la IA en solo-reglas en silencio para callers REST/scripts.
+        if "ai_provider" in pd and "ai_model" not in pd:
+            data["ai_model"] = DEFAULT_MODEL_BY_PROVIDER.get(data["ai_provider"], data["ai_model"])
         store.upsert_account(
             account_id, data["name"], data["strategy"], data["symbol"],
             data["timeframe"], data["interval_seconds"], data["starting_cash"],
@@ -245,6 +314,50 @@ def create_app() -> FastAPI:
             enabled=data["enabled"], equity=equity_v, cash=cash,
             starting_cash=data["starting_cash"],
         )
+
+    @app.post("/api/backtest", response_model=list[BacktestResultOut])
+    def backtest(
+        req: BacktestRequest,
+        config: Config = Depends(get_config),
+        exchange=Depends(get_backtest_exchange),
+        advisor_factory=Depends(get_backtest_advisor_factory),
+    ) -> list[BacktestResultOut]:
+        symbol = req.symbol or DEFAULT_ACCOUNTS[0]["symbol"]
+        accounts = [{**a, "symbol": symbol} for a in DEFAULT_ACCOUNTS]
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        since_ms, until_ms = resolve_window(now_ms, days=req.days, from_=req.from_, to=req.to)
+        if until_ms <= since_ms:
+            raise HTTPException(status_code=422, detail="la fecha 'hasta' debe ser mayor que 'desde'")
+        if until_ms - since_ms > _BACKTEST_MAX_SPAN_MS:
+            raise HTTPException(status_code=422, detail="ventana demasiado grande (máx ~31 días)")
+        # Single-flight: rechazá al toque si ya hay uno corriendo (no encolar, no saturar).
+        if not _backtest_lock.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="ya hay un backtest en curso, probá de nuevo")
+        try:
+            tfs = sorted({a["timeframe"] for a in accounts})
+            try:
+                candles_by_tf = {
+                    tf: _cached_candles(exchange, symbol, tf, since_ms, until_ms) for tf in tfs
+                }
+            except Exception as exc:  # noqa: BLE001 - error claro en vez de 500 crudo
+                raise HTTPException(status_code=502, detail=f"no se pudieron bajar datos: {exc}")
+            results = run_fleet_backtest(
+                accounts, candles_by_tf, risk=config.risk,
+                fee_rate=config.broker.fee_rate, slippage=config.broker.slippage,
+                advisor_factory=advisor_factory,
+            )
+        finally:
+            _backtest_lock.release()
+        return [
+            BacktestResultOut(
+                account_id=r.account_id, name=r.name, strategy=r.strategy, ai=r.ai,
+                return_pct=r.return_pct, max_drawdown_pct=r.max_drawdown_pct,
+                win_rate=r.win_rate, num_trades=r.num_trades, final_equity=r.final_equity,
+                exposure=r.exposure, starting_cash=r.starting_cash,
+                equity_curve=_downsample_curve(r.equity_curve),
+            )
+            for r in results
+        ]
 
     web_dist = os.environ.get("AMERICO_WEB_DIST", "web_dist")
     assets = os.path.join(web_dist, "assets")

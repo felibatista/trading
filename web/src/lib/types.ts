@@ -80,3 +80,30 @@ export interface Account {
   cash: number
   starting_cash: number
 }
+
+export interface BacktestPoint {
+  ts: string
+  equity: number
+}
+
+export interface BacktestResult {
+  account_id: string
+  name: string
+  strategy: string
+  ai: boolean
+  return_pct: number
+  max_drawdown_pct: number
+  win_rate: number
+  num_trades: number
+  final_equity: number
+  exposure: number
+  starting_cash: number
+  equity_curve: BacktestPoint[]
+}
+
+export interface BacktestRequest {
+  days?: number
+  from?: string
+  to?: string
+  symbol?: string
+}
