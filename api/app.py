@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.deps import CONFIG_PATH, get_config, get_store
+from bot.ai.advisor import DEFAULT_MODEL_BY_PROVIDER
 from api.models import (
     AccountOut,
     AccountUpdate,
@@ -228,7 +229,13 @@ def create_app() -> FastAPI:
         current = store.get_account(account_id)
         if current is None:
             raise HTTPException(status_code=404, detail="cuenta no encontrada")
-        data = {**current, **patch.model_dump(exclude_none=True)}
+        pd = patch.model_dump(exclude_none=True)
+        data = {**current, **pd}
+        # Si se cambia de proveedor sin mandar modelo, reseteamos al default del nuevo
+        # (espeja changeProvider del panel): evita un par provider/model incompatible que
+        # dejaría la IA en solo-reglas en silencio para callers REST/scripts.
+        if "ai_provider" in pd and "ai_model" not in pd:
+            data["ai_model"] = DEFAULT_MODEL_BY_PROVIDER.get(data["ai_provider"], data["ai_model"])
         store.upsert_account(
             account_id, data["name"], data["strategy"], data["symbol"],
             data["timeframe"], data["interval_seconds"], data["starting_cash"],

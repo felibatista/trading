@@ -57,6 +57,13 @@ OPENAI_VERDICT_TOOL: dict[str, Any] = {
     },
 }
 
+# Modelo por defecto de cada proveedor (coincide con el default __init__ de cada advisor).
+# Fuente de verdad para resetear el modelo cuando se cambia de proveedor sin elegir uno.
+DEFAULT_MODEL_BY_PROVIDER: dict[str, str] = {
+    "anthropic": "claude-haiku-4-5",
+    "openai": "gpt-4o-mini",
+}
+
 
 class AIAdvisor(Protocol):
     enabled: bool
@@ -203,7 +210,10 @@ class OpenAIAdvisor:
             )
             response = client.chat.completions.create(
                 model=self.model,
-                max_tokens=512,
+                # max_completion_tokens (no el viejo max_tokens) para que también los
+                # modelos de razonamiento (o-series) acepten el límite; con holgura para
+                # que alcancen a emitir el tool_call forzado.
+                max_completion_tokens=1024,
                 tools=[OPENAI_VERDICT_TOOL],
                 tool_choice={"type": "function", "function": {"name": "emit_verdict"}},
                 messages=[

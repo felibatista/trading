@@ -55,6 +55,18 @@ def test_put_rejects_bad_provider():
     assert client.put("/api/accounts/scalper", json={"ai_provider": "gemini"}).status_code == 422
 
 
+def test_put_provider_change_without_model_resets_to_default():
+    # Cambiar de proveedor sin mandar modelo resetea al default del nuevo proveedor
+    # (evita un par provider/model incompatible que dejaría la IA en solo-reglas).
+    store = Store(":memory:")
+    _seed(store)  # anthropic / claude-haiku-4-5
+    client = _client(store)
+    r = client.put("/api/accounts/scalper", json={"ai_provider": "openai"})
+    assert r.status_code == 200 and r.json()["ai_model"] == "gpt-4o-mini"
+    r2 = client.put("/api/accounts/scalper", json={"ai_provider": "anthropic"})
+    assert r2.json()["ai_model"] == "claude-haiku-4-5"
+
+
 def test_put_unknown_account_404():
     store = Store(":memory:")
     client = _client(store)
