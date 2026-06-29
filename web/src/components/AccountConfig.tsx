@@ -27,10 +27,17 @@ export function AccountConfig({
   async function save() {
     setError(null)
     const patch: Record<string, unknown> = {
-      enabled, ai_enabled: aiEnabled, strategy, timeframe, interval_seconds: Number(interval),
+      enabled, ai_enabled: aiEnabled, strategy, timeframe,
+      interval_seconds: Math.max(5, Number(interval) || 5),
     }
     if (paramsText.trim()) {
-      try { patch.params = JSON.parse(paramsText) } catch { setError('params: JSON inválido'); return }
+      let parsed: unknown
+      try { parsed = JSON.parse(paramsText) } catch { setError('params: JSON inválido'); return }
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        setError('params: debe ser un objeto JSON (ej. {"fast": 2})')
+        return
+      }
+      patch.params = parsed
     }
     setSaving(true)
     try {

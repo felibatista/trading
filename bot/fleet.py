@@ -105,6 +105,7 @@ class Fleet:
 
     def start(self) -> None:
         self._stop.clear()
+        self._threads.clear()
         for account in self.store.list_accounts():
             t = threading.Thread(
                 target=self._loop, args=(account["id"],),
