@@ -127,5 +127,38 @@ class Store:
             for r in rows
         }
 
+    # ---- accounts ----
+    def upsert_account(
+        self, id: str, name: str, strategy: str, symbol: str, timeframe: str,
+        interval_seconds: int, starting_cash: float, ai_enabled: bool,
+        enabled: bool, params: dict,
+    ) -> None:
+        values = dict(
+            name=name, strategy=strategy, symbol=symbol, timeframe=timeframe,
+            interval_seconds=interval_seconds, starting_cash=starting_cash,
+            ai_enabled=ai_enabled, enabled=enabled, params=params,
+        )
+        with self._engine.begin() as conn:
+            res = conn.execute(
+                update(accounts).where(accounts.c.id == id).values(**values)
+            )
+            if res.rowcount == 0:
+                conn.execute(insert(accounts).values(id=id, **values))
+
+    def list_accounts(self) -> list[dict]:
+        stmt = select(accounts).order_by(accounts.c.id)
+        with self._engine.connect() as conn:
+            return [dict(r._mapping) for r in conn.execute(stmt)]
+
+    def get_account(self, id: str) -> dict | None:
+        stmt = select(accounts).where(accounts.c.id == id)
+        with self._engine.connect() as conn:
+            row = conn.execute(stmt).first()
+        return None if row is None else dict(row._mapping)
+
+    def set_account_enabled(self, id: str, enabled: bool) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(update(accounts).where(accounts.c.id == id).values(enabled=enabled))
+
     def close(self) -> None:
         self._engine.dispose()
