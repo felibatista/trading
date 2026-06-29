@@ -1,6 +1,7 @@
 # bot/fleet.py
 from __future__ import annotations
 
+import json
 import threading
 from typing import Callable
 
@@ -25,7 +26,6 @@ class Fleet:
         self.config = config
         self.feed_factory = feed_factory or (lambda: CcxtDataFeed(config.exchange))
         self.log = log
-        self._pairs: list[tuple[dict, Engine]] = []
         self._threads: list[threading.Thread] = []
         self._stop = threading.Event()
 
@@ -56,37 +56,58 @@ class Fleet:
             account=account["id"],
         )
 
-    def _setup(self) -> None:
-        if self._pairs:
-            return
-        self._pairs = [
-            (a, self._build_engine(a))
-            for a in self.store.list_accounts()
-            if a["enabled"]
-        ]
+    @staticmethod
+    def _config_sig(account: dict) -> tuple:
+        return (
+            account["strategy"],
+            json.dumps(account.get("params") or {}, sort_keys=True),
+            account["symbol"],
+            account["timeframe"],
+            bool(account["ai_enabled"]),
+        )
 
     def run_once(self) -> None:
-        self._setup()
-        for account, engine in self._pairs:
+        for account in self.store.list_accounts():
+            if not account["enabled"]:
+                continue
             try:
+                engine = self._build_engine(account)
                 engine.run_cycle(account["symbol"])
             except Exception as exc:  # noqa: BLE001 - aislar fallos por cuenta
                 self.log(f"[{account['id']}] ERROR: {exc}")
 
-    def _loop(self, account: dict, engine: Engine) -> None:
+    def _loop(self, account_id: str) -> None:
+        engine = None
+        sig = None
         while not self._stop.is_set():
+            account = self.store.get_account(account_id)
+            if account is None:
+                return
+            interval = account["interval_seconds"]
+            if not account["enabled"]:
+                self._stop.wait(interval)
+                continue
+            new_sig = self._config_sig(account)
+            if engine is None or new_sig != sig:
+                try:
+                    engine = self._build_engine(account)
+                    sig = new_sig
+                    self.log(f"[{account_id}] config (re)cargada")
+                except Exception as exc:  # noqa: BLE001
+                    self.log(f"[{account_id}] ERROR al construir engine: {exc}")
+                    self._stop.wait(interval)
+                    continue
             try:
                 engine.run_cycle(account["symbol"])
             except Exception as exc:  # noqa: BLE001
-                self.log(f"[{account['id']}] ERROR: {exc}")
-            self._stop.wait(account["interval_seconds"])
+                self.log(f"[{account_id}] ERROR: {exc}")
+            self._stop.wait(interval)
 
     def start(self) -> None:
-        self._setup()
         self._stop.clear()
-        for account, engine in self._pairs:
+        for account in self.store.list_accounts():
             t = threading.Thread(
-                target=self._loop, args=(account, engine),
+                target=self._loop, args=(account["id"],),
                 name=f"fleet-{account['id']}", daemon=True,
             )
             t.start()
