@@ -44,7 +44,8 @@ class Store:
 
     def recent_decisions(self, limit: int = 10) -> list[dict]:
         rows = self._conn.execute(
-            "SELECT ts,symbol,action,reason FROM decisions ORDER BY id DESC LIMIT ?",
+            "SELECT ts,symbol,action,reason,ema_fast,ema_slow,rsi FROM decisions"
+            " ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
@@ -93,3 +94,21 @@ class Store:
             "SELECT equity,cash FROM equity ORDER BY id DESC LIMIT 1"
         ).fetchone()
         return None if row is None else (row["equity"], row["cash"])
+
+    def equity_series(self, limit: int = 200) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT ts,equity,cash FROM equity ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def recent_fills(self, limit: int = 50) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT ts,symbol,side,quantity,price,fee FROM fills"
+            " ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def close(self) -> None:
+        self._conn.close()
