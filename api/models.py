@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class StrategyOut(BaseModel):
+    fast: int = 20
+    slow: int = 50
+    rsi_period: int = 14
+    rsi_oversold: float = 35.0
+    rsi_overbought: float = 70.0
 
 
 class StatusResponse(BaseModel):
@@ -10,6 +18,19 @@ class StatusResponse(BaseModel):
     symbols: list[str]
     equity: float
     cash: float
+    loop_interval_seconds: int = 3600
+    last_run_at: str | None = None
+    next_run_at: str | None = None
+    strategy: StrategyOut = Field(default_factory=StrategyOut)
+
+
+class CandleOut(BaseModel):
+    ts: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
 
 
 class EquityPoint(BaseModel):

@@ -1,14 +1,53 @@
 from __future__ import annotations
 
+import logging
 import os
+import time
+from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.deps import get_config, get_store
-from api.models import DecisionOut, EquityPoint, FillOut, PositionOut, StatusResponse
+from api.models import (
+    CandleOut,
+    DecisionOut,
+    EquityPoint,
+    FillOut,
+    PositionOut,
+    StatusResponse,
+    StrategyOut,
+)
 from bot.config import Config
+from bot.data.feed import CcxtDataFeed, DataFeed
 from bot.store.db import Store
+
+logger = logging.getLogger(__name__)
+
+# Feed compartido a nivel módulo (singleton lazy): un solo exchange para todo el
+# proceso, en vez de construir uno por request. Es seteable/override-able para
+# los tests vía set_candle_feed() o app.dependency_overrides[get_candle_feed].
+_candle_feed: DataFeed | None = None
+
+# Cache TTL en proceso para no golpear el exchange con el polling del panel.
+# Mantenerlo >= el intervalo de polling del panel (2.5s) para deduplicar de verdad.
+_CANDLE_TTL_SECONDS = 4.0
+_candle_cache: dict[tuple, tuple[float, list[CandleOut]]] = {}
+
+
+def set_candle_feed(feed: DataFeed | None) -> None:
+    """Reemplaza el feed compartido (principalmente para tests). Limpia el cache."""
+    global _candle_feed
+    _candle_feed = feed
+    _candle_cache.clear()
+
+
+def get_candle_feed(config: Config = Depends(get_config)) -> DataFeed:
+    """Devuelve el feed compartido, creándolo de forma lazy si no existe."""
+    global _candle_feed
+    if _candle_feed is None:
+        _candle_feed = CcxtDataFeed(exchange_id=config.exchange)
+    return _candle_feed
 
 
 def _cors_origins() -> list[str]:
@@ -40,6 +79,21 @@ def create_app() -> FastAPI:
     ) -> StatusResponse:
         eq = store.latest_equity()
         equity, cash = eq if eq is not None else (0.0, 0.0)
+
+        recent = store.recent_decisions(1)
+        last_run_at = recent[0]["ts"] if recent else None
+        next_run_at: str | None = None
+        if last_run_at is not None:
+            try:
+                next_run_at = (
+                    datetime.fromisoformat(last_run_at)
+                    + timedelta(seconds=config.loop_interval_seconds)
+                ).isoformat()
+            except ValueError:
+                # ts no-ISO (datos legacy/manuales): no rompemos el header del panel.
+                next_run_at = None
+
+        s = config.strategy
         return StatusResponse(
             exchange=config.exchange,
             timeframe=config.timeframe,
@@ -47,7 +101,58 @@ def create_app() -> FastAPI:
             symbols=config.symbols,
             equity=equity,
             cash=cash,
+            loop_interval_seconds=config.loop_interval_seconds,
+            last_run_at=last_run_at,
+            next_run_at=next_run_at,
+            strategy=StrategyOut(
+                fast=s.fast,
+                slow=s.slow,
+                rsi_period=s.rsi_period,
+                rsi_oversold=s.rsi_oversold,
+                rsi_overbought=s.rsi_overbought,
+            ),
         )
+
+    @app.get("/api/candles", response_model=list[CandleOut])
+    def candles(
+        symbol: str | None = None,
+        timeframe: str | None = None,
+        limit: int = 120,
+        config: Config = Depends(get_config),
+        feed: DataFeed = Depends(get_candle_feed),
+    ) -> list[CandleOut]:
+        sym = symbol or config.symbols[0]
+        tf = timeframe or config.timeframe
+        lim = max(1, min(limit, 500))
+
+        key = (id(feed), sym, tf, lim)
+        now = time.monotonic()
+        cached = _candle_cache.get(key)
+        if cached is not None and (now - cached[0]) < _CANDLE_TTL_SECONDS:
+            return cached[1]
+
+        try:
+            # Incluimos la última vela (en formación): NO usamos drop_forming_candle
+            # para que el gráfico sea vivo.
+            df = feed.fetch_ohlcv(sym, tf, lim)
+            out = [
+                CandleOut(
+                    ts=row.timestamp.isoformat(),
+                    open=float(row.open),
+                    high=float(row.high),
+                    low=float(row.low),
+                    close=float(row.close),
+                    volume=float(row.volume),
+                )
+                for row in df.itertuples(index=False)
+            ]
+        except Exception:
+            # Ante cualquier error de red/exchange, el panel debe seguir vivo.
+            logger.exception("candles: fallo al traer OHLCV para %s %s", sym, tf)
+            return []
+
+        _candle_cache[key] = (now, out)
+        return out
 
     @app.get("/api/equity", response_model=list[EquityPoint])
     def equity(limit: int = 200, store: Store = Depends(get_store)) -> list[EquityPoint]:

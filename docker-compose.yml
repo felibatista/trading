@@ -17,6 +17,8 @@ services:
       OKX_API_PASSWORD: ${OKX_API_PASSWORD:-}
     volumes:
       - americo-data:/data
+      # Config montada: editás config.docker.yaml y aplicás con `docker compose restart bot api` (sin rebuild).
+      - ./config.docker.yaml:/app/config.docker.yaml:ro
     restart: unless-stopped
 
   api:
@@ -31,6 +33,7 @@ services:
       AMERICO_CORS_ORIGINS: ${AMERICO_CORS_ORIGINS:-*}
     volumes:
       - americo-data:/data
+      - ./config.docker.yaml:/app/config.docker.yaml:ro
     expose:
       - "8000"
     restart: unless-stopped

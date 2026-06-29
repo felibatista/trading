@@ -10,12 +10,14 @@ export const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn('inline-flex h-9 items-center justify-center rounded-lg bg-zinc-100 p-1 text-zinc-500', className)}
+    className={cn('inline-flex h-8 items-center justify-center rounded-lg bg-zinc-100 p-1 text-zinc-500', className)}
     {...props}
   />
 ))
 TabsList.displayName = TabsPrimitive.List.displayName
 
+// The active tab lifts forward with a small shadow (Refactoring UI: elevation as
+// a way to show which control is "on top").
 export const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
@@ -23,7 +25,7 @@ export const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-zinc-900 data-[state=active]:shadow',
+      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-all hover:text-zinc-700 data-[state=active]:bg-white data-[state=active]:text-zinc-900 data-[state=active]:shadow-sm',
       className,
     )}
     {...props}

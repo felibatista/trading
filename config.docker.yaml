@@ -1,30 +1,37 @@
 # Configuración de producción para el deploy con Docker / Coolify.
 # El bot y la API leen este archivo; la DB vive en el volumen compartido /data.
+#
+# ⚙️  PERFIL ACTUAL: "en vivo / demo" — timeframe 1m, loop corto, EMAs rápidas y
+#    stop/take ajustados para que VEAS el ciclo completo (entrada + cierre
+#    automático) en minutos, en el panel. Es trading real-simulado sobre precios
+#    reales de OKX, solo con parámetros sensibles.
+#    Para algo CONSERVADOR: timeframe "1h", loop 3600, fast 20 / slow 50,
+#    stop_loss_pct 0.02 / take_profit_pct 0.04.
 exchange: okx
-timeframe: "1h"
+timeframe: "1m"
 symbols:
   - BTC/USDT
   - ETH/USDT
 limit: 200
 db_path: /data/americo.sqlite
-loop_interval_seconds: 3600
+loop_interval_seconds: 15
 strategy:
-  fast: 20
-  slow: 50
-  rsi_period: 14
-  rsi_oversold: 35
-  rsi_overbought: 70
+  fast: 2
+  slow: 4
+  rsi_period: 7
+  rsi_oversold: 20
+  rsi_overbought: 85
 broker:
   kind: paper          # paper | okx_demo (okx_demo necesita OKX_API_KEY/SECRET/PASSWORD)
   paper_cash: 10000
   fee_rate: 0.001
   slippage: 0.0005
 risk:
-  risk_per_trade: 0.01
-  stop_loss_pct: 0.02
-  take_profit_pct: 0.04
-  max_exposure_pct: 0.30
-  max_positions: 3
+  risk_per_trade: 0.02
+  stop_loss_pct: 0.0018
+  take_profit_pct: 0.0026
+  max_exposure_pct: 0.50
+  max_positions: 2
 ai:
   enabled: false       # poné true + ANTHROPIC_API_KEY en el entorno para activar el filtro IA
   model: claude-haiku-4-5

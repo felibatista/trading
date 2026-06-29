@@ -1,3 +1,11 @@
+export interface Strategy {
+  fast: number
+  slow: number
+  rsi_period: number
+  rsi_oversold: number
+  rsi_overbought: number
+}
+
 export interface Status {
   exchange: string
   timeframe: string
@@ -5,6 +13,19 @@ export interface Status {
   symbols: string[]
   equity: number
   cash: number
+  loop_interval_seconds: number
+  last_run_at: string | null
+  next_run_at: string | null
+  strategy: Strategy
+}
+
+export interface Candle {
+  ts: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
 }
 
 export interface EquityPoint {
@@ -29,6 +50,9 @@ export interface Decision {
   ema_fast: number
   ema_slow: number
   rsi: number
+  ai_action?: string | null
+  ai_confidence?: number | null
+  ai_rationale?: string | null
 }
 
 export interface Fill {
