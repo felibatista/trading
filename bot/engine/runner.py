@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
@@ -117,3 +118,23 @@ class Engine:
 
         self._snapshot({symbol: price}, ts)
         return CycleResult(symbol, signal.action.value, detail)
+
+    def run_loop(
+        self,
+        symbols: list[str],
+        interval_seconds: int,
+        max_cycles: int | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> int:
+        cycles = 0
+        while max_cycles is None or cycles < max_cycles:
+            for symbol in symbols:
+                try:
+                    self.run_cycle(symbol)
+                except Exception as exc:  # noqa: BLE001 - aislar fallos por símbolo
+                    self.log(f"[{symbol}] ERROR: {exc}")
+            cycles += 1
+            if max_cycles is not None and cycles >= max_cycles:
+                break
+            sleep(interval_seconds)
+        return cycles
