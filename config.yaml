@@ -1,0 +1,11 @@
+exchange: okx
+timeframe: "1h"
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+strategy:
+  fast: 20
+  slow: 50
+  rsi_period: 14
+  rsi_oversold: 35
+  rsi_overbought: 70
