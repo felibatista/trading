@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.deps import get_config, get_store
 from api.models import DecisionOut, EquityPoint, FillOut, PositionOut, StatusResponse
@@ -8,8 +11,23 @@ from bot.config import Config
 from bot.store.db import Store
 
 
+def _cors_origins() -> list[str]:
+    raw = os.environ.get(
+        "AMERICO_CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    )
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="AMÉRICO API", version="1.0.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(),
+        allow_credentials=False,
+        allow_methods=["GET"],
+        allow_headers=["*"],
+    )
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

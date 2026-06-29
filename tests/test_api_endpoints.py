@@ -84,3 +84,9 @@ def test_fills_endpoint(client):
     assert fills[0]["side"] == "BUY"
     assert fills[0]["price"] == 100.0
     assert fills[0]["quantity"] == 0.01
+
+
+def test_cors_allows_dev_origin(client):
+    r = client.get("/api/status", headers={"Origin": "http://localhost:5173"})
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
