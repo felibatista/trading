@@ -8,7 +8,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT, symbol TEXT, action TEXT, reason TEXT,
-    ema_fast REAL, ema_slow REAL, rsi REAL
+    ema_fast REAL, ema_slow REAL, rsi REAL,
+    ai_action TEXT, ai_confidence REAL, ai_rationale TEXT
 );
 CREATE TABLE IF NOT EXISTS fills (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,21 +31,47 @@ class Store:
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        # Migración aditiva e idempotente: agrega columnas de IA a una DB ya creada
+        # con el esquema viejo (CREATE TABLE IF NOT EXISTS no las añade solo).
+        existing = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(decisions)").fetchall()
+        }
+        for column, decl in (
+            ("ai_action", "TEXT"),
+            ("ai_confidence", "REAL"),
+            ("ai_rationale", "TEXT"),
+        ):
+            if column not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE decisions ADD COLUMN {column} {decl}"
+                )
+        self._conn.commit()
 
     def record_decision(
         self, ts: str, symbol: str, action: str, reason: str,
         ema_fast: float, ema_slow: float, rsi: float,
+        ai_action: str | None = None,
+        ai_confidence: float | None = None,
+        ai_rationale: str | None = None,
     ) -> None:
         self._conn.execute(
-            "INSERT INTO decisions (ts,symbol,action,reason,ema_fast,ema_slow,rsi)"
-            " VALUES (?,?,?,?,?,?,?)",
-            (ts, symbol, action, reason, ema_fast, ema_slow, rsi),
+            "INSERT INTO decisions"
+            " (ts,symbol,action,reason,ema_fast,ema_slow,rsi,"
+            " ai_action,ai_confidence,ai_rationale)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (ts, symbol, action, reason, ema_fast, ema_slow, rsi,
+             ai_action, ai_confidence, ai_rationale),
         )
         self._conn.commit()
 
     def recent_decisions(self, limit: int = 10) -> list[dict]:
         rows = self._conn.execute(
-            "SELECT ts,symbol,action,reason,ema_fast,ema_slow,rsi FROM decisions"
+            "SELECT ts,symbol,action,reason,ema_fast,ema_slow,rsi,"
+            "ai_action,ai_confidence,ai_rationale FROM decisions"
             " ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()

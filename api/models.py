@@ -34,6 +34,9 @@ class DecisionOut(BaseModel):
     ema_fast: float
     ema_slow: float
     rsi: float
+    ai_action: str | None = None
+    ai_confidence: float | None = None
+    ai_rationale: str | None = None
 
 
 class FillOut(BaseModel):

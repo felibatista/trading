@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 
+from bot.ai.advisor import AIAdvisor, AnthropicAdvisor, NoopAdvisor
 from bot.broker.base import Broker
 from bot.broker.okx_demo import OkxDemoBroker
 from bot.broker.paper import LocalPaperBroker
@@ -43,6 +44,23 @@ def build_broker(config: Config, store: Store | None = None) -> Broker:
     return LocalPaperBroker(cash, bp.fee_rate, bp.slippage, holdings=holdings)
 
 
+def build_advisor(config: Config) -> AIAdvisor:
+    if not config.ai.enabled:
+        return NoopAdvisor()
+    # No instancia el cliente de Anthropic acá (es perezoso): no requiere la API key
+    # hasta el primer ciclo. Si falta la key o falla, cae a solo-reglas.
+    return AnthropicAdvisor(
+        model=config.ai.model,
+        timeout_seconds=config.ai.timeout_seconds,
+        max_retries=config.ai.max_retries,
+    )
+
+
+def ai_affects_execution(config: Config) -> bool:
+    # La IA solo puede vetar (alterar la ejecución) en paper; en okx_demo/real es informativa.
+    return config.ai.enabled and config.broker.kind == "paper"
+
+
 def _cmd_decide(args) -> int:
     config = load_config(args.config)
     exchange = args.exchange or config.exchange
@@ -74,7 +92,14 @@ def _cmd_run(args) -> int:
         risk=config.risk,
         timeframe=timeframe,
         limit=config.limit,
+        advisor=build_advisor(config),
+        ai_affects_execution=ai_affects_execution(config),
     )
+    if config.ai.enabled:
+        import os
+
+        estado = "lista" if os.environ.get("ANTHROPIC_API_KEY") else "SIN API key (cae a solo-reglas)"
+        print(f"IA: {config.ai.model} · {estado}")
     if args.loop:
         print(f"Loop cada {config.loop_interval_seconds}s · {config.broker.kind} · {exchange}")
         engine.run_loop([args.symbol], config.loop_interval_seconds)

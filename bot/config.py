@@ -33,6 +33,15 @@ class RiskParams:
 
 
 @dataclass
+class AIParams:
+    # Apagada por defecto en el código (seguro); config.yaml puede prenderla.
+    enabled: bool = False
+    model: str = "claude-haiku-4-5"  # configurable a claude-sonnet-4-6 / claude-opus-4-8
+    timeout_seconds: float = 20.0
+    max_retries: int = 1
+
+
+@dataclass
 class Config:
     exchange: str = "okx"
     timeframe: str = "1h"
@@ -43,6 +52,7 @@ class Config:
     strategy: StrategyParams = field(default_factory=StrategyParams)
     broker: BrokerParams = field(default_factory=BrokerParams)
     risk: RiskParams = field(default_factory=RiskParams)
+    ai: AIParams = field(default_factory=AIParams)
 
 
 def load_config(path: str | Path) -> Config:
@@ -50,6 +60,7 @@ def load_config(path: str | Path) -> Config:
     strat = data.get("strategy") or {}
     brk = data.get("broker") or {}
     rsk = data.get("risk") or {}
+    ai = data.get("ai") or {}
     return Config(
         exchange=data.get("exchange", "okx"),
         timeframe=data.get("timeframe", "1h"),
@@ -76,5 +87,11 @@ def load_config(path: str | Path) -> Config:
             take_profit_pct=rsk.get("take_profit_pct", 0.04),
             max_exposure_pct=rsk.get("max_exposure_pct", 0.30),
             max_positions=rsk.get("max_positions", 3),
+        ),
+        ai=AIParams(
+            enabled=ai.get("enabled", False),
+            model=ai.get("model", "claude-haiku-4-5"),
+            timeout_seconds=ai.get("timeout_seconds", 20.0),
+            max_retries=ai.get("max_retries", 1),
         ),
     )
