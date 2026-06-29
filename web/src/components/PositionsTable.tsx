@@ -1,3 +1,5 @@
+import { Wallet } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -7,14 +9,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatUsd, pnlColor } from '@/lib/format'
+import { Delta } from '@/components/Delta'
+import { formatUsd } from '@/lib/format'
 import type { Position } from '@/lib/types'
 
 export function PositionsTable({ positions }: { positions: Position[] }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base font-semibold text-zinc-900">Posiciones abiertas</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Posiciones abiertas</CardTitle>
+        {positions.length > 0 && (
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-xs font-medium tabular-nums text-zinc-600">
+            {positions.length}
+          </span>
+        )}
       </CardHeader>
       <CardContent>
         <Table>
@@ -32,9 +40,13 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
           </TableHeader>
           <TableBody>
             {positions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-zinc-400">
-                  Sin posiciones abiertas.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={8}>
+                  <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                    <Wallet className="h-7 w-7 text-zinc-300" aria-hidden="true" />
+                    <p className="text-sm font-medium text-zinc-600">Sin posiciones abiertas</p>
+                    <p className="text-xs text-zinc-400">Aparecerán aquí cuando Américo entre al mercado.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -44,14 +56,18 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
                 const value = current * p.quantity
                 return (
                   <TableRow key={p.symbol}>
-                    <TableCell className="font-medium">{p.symbol}</TableCell>
-                    <TableCell>Largo</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatUsd(p.entry_price)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatUsd(current)}</TableCell>
-                    <TableCell className={`text-right tabular-nums ${pnlColor(pnl)}`}>{formatUsd(pnl)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatUsd(p.stop_loss)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatUsd(p.take_profit)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatUsd(value)}</TableCell>
+                    <TableCell className="font-mono font-semibold text-zinc-900">{p.symbol}</TableCell>
+                    <TableCell>
+                      <Badge variant="success">LARGO</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatUsd(p.entry_price)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatUsd(current)}</TableCell>
+                    <TableCell className="text-right">
+                      <Delta value={pnl} label={formatUsd(pnl)} className="justify-end" />
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-zinc-500">{formatUsd(p.stop_loss)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-zinc-500">{formatUsd(p.take_profit)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatUsd(value)}</TableCell>
                   </TableRow>
                 )
               })

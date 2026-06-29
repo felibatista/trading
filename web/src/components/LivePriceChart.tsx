@@ -9,9 +9,11 @@ import {
   YAxis,
 } from 'recharts'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatPct, formatUsd, pnlColor } from '@/lib/format'
+import { Card, CardContent, CardEyebrow, CardHeader } from '@/components/ui/card'
+import { Delta } from '@/components/Delta'
+import { formatPct, formatUsd } from '@/lib/format'
 import { ema } from '@/lib/indicators'
+import { tokens } from '@/lib/tokens'
 import type { Candle, Fill, Position, Strategy } from '@/lib/types'
 
 function label(ts: string): string {
@@ -100,30 +102,34 @@ export function LivePriceChart({
   const fmtPrice = (v: number) => formatUsd(Number(v))
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
+      {/* Brand accent on the page's hero panel (Refactoring UI: accent borders). */}
+      <div className="accent-top h-1 w-full" />
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div className="space-y-1">
-          <CardTitle className="text-base font-semibold text-zinc-900">
+          <CardEyebrow>
             Precio en vivo · {symbol || '—'} · {timeframe || '—'}
-          </CardTitle>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-2xl font-semibold tabular-nums text-zinc-900">
+          </CardEyebrow>
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-3xl font-semibold tabular-nums text-zinc-900">
               {last ? fmtPrice(lastClose) : '—'}
             </span>
             {last && prev && (
-              <span className={`text-sm font-medium tabular-nums ${pnlColor(change)}`}>
-                {change >= 0 ? '▲' : '▼'} {formatUsd(Math.abs(change))} ({formatPct(changePct)})
-              </span>
+              <Delta
+                value={change}
+                label={`${formatUsd(Math.abs(change))} (${formatPct(changePct)})`}
+                className="text-sm"
+              />
             )}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <Badge variant="outline">EMA {fast}</Badge>
-          <Badge variant="outline">EMA {slow}</Badge>
-          <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+          <Badge variant="brand">EMA {fast}</Badge>
+          <Badge variant="warning">EMA {slow}</Badge>
+          <span className="flex items-center gap-1.5 rounded-full bg-gain-50 px-2.5 py-0.5 text-xs font-semibold text-gain-700 ring-1 ring-inset ring-gain-100">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="absolute inline-flex h-full w-full animate-pulse-live rounded-full bg-gain-500" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-gain-500" />
             </span>
             EN VIVO
           </span>
@@ -132,50 +138,61 @@ export function LivePriceChart({
       <CardContent>
         {candles.length === 0 ? (
           <div className="flex h-72 w-full items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-zinc-50">
-            <p className="text-sm text-zinc-400">Esperando datos del mercado…</p>
+            <p className="text-sm text-zinc-500">Esperando datos del mercado…</p>
           </div>
         ) : (
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
+                <CartesianGrid strokeDasharray="2 4" stroke={tokens.grid} vertical={false} />
                 <XAxis
                   dataKey="t"
-                  tick={{ fontSize: 11, fill: '#a1a1aa' }}
+                  tick={{ fontSize: 11, fill: tokens.axis, fontFamily: 'JetBrains Mono' }}
+                  tickLine={false}
+                  axisLine={{ stroke: tokens.grid }}
                   minTickGap={28}
                 />
                 <YAxis
                   domain={domain}
-                  tick={{ fontSize: 11, fill: '#a1a1aa' }}
+                  tick={{ fontSize: 11, fill: tokens.axis, fontFamily: 'JetBrains Mono' }}
+                  tickLine={false}
+                  axisLine={false}
                   width={72}
                   tickFormatter={(v) => fmtPrice(Number(v))}
                 />
                 <Tooltip
                   formatter={(v, name) => [fmtPrice(Number(v)), name]}
-                  labelClassName="text-xs"
-                  contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: '#e4e4e7' }}
+                  contentStyle={{
+                    borderRadius: 10,
+                    border: 'none',
+                    boxShadow: '0 14px 24px -10px hsl(222 42% 25% / 0.18)',
+                    fontSize: 12,
+                    fontFamily: 'JetBrains Mono',
+                  }}
+                  labelStyle={{ color: tokens.axis, fontFamily: 'Inter' }}
+                  cursor={{ stroke: tokens.brand400, strokeWidth: 1, strokeDasharray: '3 3' }}
                 />
                 {position && (
                   <ReferenceLine
                     y={position.stop_loss}
-                    stroke="#ef4444"
+                    stroke={tokens.loss}
                     strokeDasharray="4 4"
-                    label={{ value: 'Stop', position: 'insideTopLeft', fill: '#ef4444', fontSize: 10 }}
+                    label={{ value: 'Stop', position: 'insideTopLeft', fill: tokens.loss, fontSize: 10 }}
                   />
                 )}
                 {position && (
                   <ReferenceLine
                     y={position.take_profit}
-                    stroke="#10b981"
+                    stroke={tokens.gain}
                     strokeDasharray="4 4"
-                    label={{ value: 'Take', position: 'insideBottomLeft', fill: '#10b981', fontSize: 10 }}
+                    label={{ value: 'Take', position: 'insideBottomLeft', fill: tokens.gain, fontSize: 10 }}
                   />
                 )}
                 <Line
                   name="Precio"
                   type="monotone"
                   dataKey="close"
-                  stroke="#18181b"
+                  stroke={tokens.ink}
                   strokeWidth={2}
                   dot={false}
                   isAnimationActive={false}
@@ -184,7 +201,7 @@ export function LivePriceChart({
                   name={`EMA ${fast}`}
                   type="monotone"
                   dataKey="emaFast"
-                  stroke="#3b82f6"
+                  stroke={tokens.brand}
                   strokeWidth={1.5}
                   dot={false}
                   isAnimationActive={false}
@@ -193,7 +210,7 @@ export function LivePriceChart({
                   name={`EMA ${slow}`}
                   type="monotone"
                   dataKey="emaSlow"
-                  stroke="#f59e0b"
+                  stroke={tokens.warn}
                   strokeWidth={1.5}
                   dot={false}
                   isAnimationActive={false}
@@ -204,7 +221,7 @@ export function LivePriceChart({
                   stroke="transparent"
                   connectNulls={false}
                   isAnimationActive={false}
-                  dot={{ r: 5, fill: '#10b981', stroke: '#ffffff', strokeWidth: 1.5 }}
+                  dot={{ r: 5, fill: tokens.gain, stroke: '#ffffff', strokeWidth: 1.5 }}
                 />
                 <Line
                   name="Venta"
@@ -212,7 +229,7 @@ export function LivePriceChart({
                   stroke="transparent"
                   connectNulls={false}
                   isAnimationActive={false}
-                  dot={{ r: 5, fill: '#ef4444', stroke: '#ffffff', strokeWidth: 1.5 }}
+                  dot={{ r: 5, fill: tokens.loss, stroke: '#ffffff', strokeWidth: 1.5 }}
                 />
               </LineChart>
             </ResponsiveContainer>

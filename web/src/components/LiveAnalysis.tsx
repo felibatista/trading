@@ -63,9 +63,9 @@ export function LiveAnalysis({
                 <p
                   className={`flex items-center gap-1 text-lg font-semibold ${
                     trend === 'up'
-                      ? 'text-emerald-600'
+                      ? 'text-gain-700'
                       : trend === 'down'
-                        ? 'text-red-600'
+                        ? 'text-loss-600'
                         : 'text-zinc-500'
                   }`}
                 >
@@ -92,11 +92,11 @@ export function LiveAnalysis({
                   RSI ({strategy?.rsi_period ?? 14})
                 </span>
                 <span
-                  className={`font-medium tabular-nums ${
+                  className={`font-semibold tabular-nums ${
                     rsiZone === 'oversold'
-                      ? 'text-emerald-600'
+                      ? 'text-gain-700'
                       : rsiZone === 'overbought'
-                        ? 'text-red-600'
+                        ? 'text-loss-600'
                         : 'text-zinc-700'
                   }`}
                 >
@@ -107,11 +107,11 @@ export function LiveAnalysis({
               </div>
               <div className="relative h-2 w-full overflow-hidden rounded-full bg-zinc-100">
                 <div
-                  className="absolute inset-y-0 left-0 bg-emerald-200"
+                  className="absolute inset-y-0 left-0 bg-gain-200"
                   style={{ width: `${oversold}%` }}
                 />
                 <div
-                  className="absolute inset-y-0 right-0 bg-red-200"
+                  className="absolute inset-y-0 right-0 bg-loss-200"
                   style={{ width: `${100 - overbought}%` }}
                 />
                 <div
@@ -138,10 +138,10 @@ export function LiveAnalysis({
             </div>
 
             {decision.ai_action && (
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+              <div className="rounded-lg bg-brand-50 p-3 ring-1 ring-inset ring-brand-100">
                 <div className="mb-1 flex items-center gap-2">
-                  <Bot className="h-4 w-4 text-zinc-500" />
-                  <span className="text-xs font-medium text-zinc-500">Veredicto IA</span>
+                  <Bot className="h-4 w-4 text-brand-600" />
+                  <span className="text-xs font-semibold text-brand-700">Veredicto IA</span>
                   <Badge variant={actionVariant(decision.ai_action)}>
                     {actionLabel(decision.ai_action)}
                   </Badge>

@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { AlertCircle } from 'lucide-react'
 import { ActivityLog } from '@/components/ActivityLog'
 import { EquityChart } from '@/components/EquityChart'
 import { HistoryTable } from '@/components/HistoryTable'
@@ -38,11 +39,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
+      {/* Brand accent across the very top of the layout (Refactoring UI). */}
+      <div className="accent-top h-1 w-full" />
       <TopBar status={status.data} />
-      <main className="mx-auto max-w-7xl space-y-4 p-6">
+      <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
         {status.error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-            No se pudo conectar con la API. ¿Está corriendo uvicorn en el puerto 8000?
+          <div className="flex items-start gap-2.5 rounded-lg bg-loss-50 px-4 py-3 text-sm text-loss-700 ring-1 ring-inset ring-loss-100">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              No se pudo conectar con la API. ¿Está corriendo uvicorn en el puerto 8000?
+            </span>
           </div>
         )}
         <KpiRow status={status.data} series={series} />

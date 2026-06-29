@@ -24,22 +24,24 @@ export function EquityChart({
   returnPct,
 }: {
   series: EquityPoint[]
-  equity: number
-  returnPct: number
+  equity?: number
+  returnPct?: number
 }) {
   const data = series.map((p) => ({ t: p.ts.slice(11, 16), equity: p.equity, cash: p.cash }))
   const hasData = data.length > 1
+  const latestEquity = equity ?? (series.length ? series[series.length - 1].equity : 0)
+  const base = series.length ? series[0].equity : 0
+  const ret = returnPct ?? (base > 0 ? latestEquity / base - 1 : 0)
 
   return (
-    <Card className="overflow-hidden">
-      <div className="accent-top h-1 w-full" />
+    <Card>
       <CardHeader>
         <CardEyebrow>Equity actual</CardEyebrow>
         <div className="font-mono text-4xl font-semibold tracking-tight text-zinc-900 tabular-nums">
-          {formatUsd(equity)}
+          {formatUsd(latestEquity)}
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <Delta value={returnPct} label={formatPct(returnPct)} />
+          <Delta value={ret} label={formatPct(ret)} />
           <span className="text-zinc-400">retorno acumulado</span>
         </div>
       </CardHeader>

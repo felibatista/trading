@@ -27,10 +27,10 @@ export function NextRunCard({ status }: { status: Status | null }) {
         ) : analyzing ? (
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
+              <span className="absolute inline-flex h-full w-full animate-pulse-live rounded-full bg-gain-500" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-gain-500" />
             </span>
-            <span className="text-2xl font-semibold text-emerald-600">Analizando…</span>
+            <span className="font-display text-2xl font-semibold text-gain-700">Analizando…</span>
           </div>
         ) : (
           <div className="flex items-baseline gap-2">
