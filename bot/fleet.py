@@ -6,7 +6,7 @@ import threading
 from typing import Callable
 
 from bot.broker.paper import LocalPaperBroker
-from bot.cli import build_advisor
+from bot.cli import make_advisor
 from bot.config import Config
 from bot.data.feed import CcxtDataFeed, DataFeed
 from bot.engine.runner import Engine
@@ -39,9 +39,17 @@ class Fleet:
 
     def _build_engine(self, account: dict) -> Engine:
         ai_on = bool(account["ai_enabled"])
-        # build_advisor mira config.ai.enabled; lo respetamos por cuenta clonando el flag.
+        # IA por cuenta: la enciende el flag de la cuenta + el master global (cfg.ai.enabled),
+        # y cada cuenta elige su proveedor/modelo. timeout/retries siguen globales.
         cfg = self.config
-        advisor = build_advisor(cfg) if (ai_on and cfg.ai.enabled) else None
+        advisor = (
+            make_advisor(
+                account["ai_provider"], account["ai_model"],
+                cfg.ai.timeout_seconds, cfg.ai.max_retries,
+            )
+            if (ai_on and cfg.ai.enabled)
+            else None
+        )
         return Engine(
             feed=self.feed_factory(),
             broker=self._build_broker(account),
@@ -64,6 +72,8 @@ class Fleet:
             account["symbol"],
             account["timeframe"],
             bool(account["ai_enabled"]),
+            account.get("ai_provider"),
+            account.get("ai_model"),
         )
 
     def run_once(self) -> None:

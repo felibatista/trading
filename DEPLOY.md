@@ -20,7 +20,7 @@ navegador ──▶ web (nginx :80) ──┬─ archivos estáticos del panel
 ## Probar local
 
 ```bash
-cp .env.example .env        # editá BOT_SYMBOL / ANTHROPIC_API_KEY si querés
+cp .env.example .env        # editá ANTHROPIC_API_KEY / OPENAI_API_KEY si querés
 docker compose build
 WEB_PORT=8080 docker compose up
 ```
@@ -33,7 +33,7 @@ Abrí http://localhost:8080 — el panel aparece y se va poblando a medida que e
 2. En Coolify: **New Resource → Docker Compose**, apuntá al repositorio y a `docker-compose.yml`.
 3. **Variables de entorno** (Coolify las inyecta al `compose`):
    - `BOT_SYMBOL` — el par a operar (ej. `BTC/USDT`).
-   - `ANTHROPIC_API_KEY` — *opcional*; activa el filtro IA. Requiere además poner `ai.enabled: true` en `config.docker.yaml`. Sin key el bot corre en solo-reglas.
+   - `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — *opcionales*; activan el filtro IA. Cada cuenta elige su proveedor (anthropic/openai) y modelo desde el panel; pegá la key del/los que uses. Requiere además `ai.enabled: true` en `config.docker.yaml`. Sin la key del proveedor elegido, esa cuenta corre en solo-reglas.
    - `OKX_API_KEY` / `OKX_API_SECRET` / `OKX_API_PASSWORD` — *opcional*; solo si cambiás `broker.kind` a `okx_demo`.
    - `AMERICO_CORS_ORIGINS` — dejalo en `*` (el panel es same-origin).
 4. **Dominio:** asigná tu dominio al servicio **`web`** (puerto `80`). El proxy de Coolify lo enruta; el panel resuelve `/api/*` solo. No expongas `api` directo.
@@ -43,11 +43,11 @@ Abrí http://localhost:8080 — el panel aparece y se va poblando a medida que e
 
 `config.docker.yaml` es la config de producción (la edita el repo, no el entorno):
 - `broker.kind: paper` — simulación con datos reales de OKX. Cambiá a `okx_demo` para ejecutar contra el order book demo (necesita las `OKX_*`).
-- `ai.enabled: false` — poné `true` + `ANTHROPIC_API_KEY` para el filtro IA (veta entradas dudosas; ante cualquier error cae a solo-reglas).
+- `ai.enabled: true` — master de la IA. Con la API key del proveedor de cada cuenta (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) veta entradas dudosas; el proveedor/modelo se elige por cuenta en el panel. Ante cualquier error cae a solo-reglas.
 - `timeframe`, `strategy`, `risk` — ajustá a gusto; el `bot` y la `api` releen el archivo al reiniciar.
 
 ## Notas
 
 - **Un símbolo por worker.** El servicio `bot` opera el par de `BOT_SYMBOL`. Para varios pares, duplicá el servicio `bot` con otro símbolo y el mismo volumen.
 - **SQLite en volumen compartido** alcanza para esta escala (escritura cada `loop_interval_seconds`). Si subís frecuencia o agregás workers, migrá a Postgres.
-- **Las llaves nunca van al repo.** `ANTHROPIC_API_KEY` y las `OKX_*` salen siempre del entorno (Coolify) o de un `.env` local (gitignored).
+- **Las llaves nunca van al repo.** `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` y las `OKX_*` salen siempre del entorno (Coolify) o de un `.env` local (gitignored).

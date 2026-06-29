@@ -45,4 +45,5 @@ def seed_default_accounts(store: Store) -> None:
             a["id"], a["name"], a["strategy"], a["symbol"], a["timeframe"],
             a["interval_seconds"], a["starting_cash"], a["ai_enabled"],
             a["enabled"], a["params"],
+            a.get("ai_provider", "anthropic"), a.get("ai_model", "claude-haiku-4-5"),
         )

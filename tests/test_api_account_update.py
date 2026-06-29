@@ -34,6 +34,27 @@ def test_put_updates_editable_fields():
     assert acc["params"] == {"fast": 3, "slow": 9} and acc["interval_seconds"] == 30
 
 
+def test_put_updates_ai_provider_and_model():
+    store = Store(":memory:")
+    _seed(store)
+    client = _client(store)
+    r = client.put("/api/accounts/scalper", json={
+        "ai_provider": "openai", "ai_model": "gpt-4o-mini",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ai_provider"] == "openai" and body["ai_model"] == "gpt-4o-mini"
+    acc = store.get_account("scalper")
+    assert acc["ai_provider"] == "openai" and acc["ai_model"] == "gpt-4o-mini"
+
+
+def test_put_rejects_bad_provider():
+    store = Store(":memory:")
+    _seed(store)
+    client = _client(store)
+    assert client.put("/api/accounts/scalper", json={"ai_provider": "gemini"}).status_code == 422
+
+
 def test_put_unknown_account_404():
     store = Store(":memory:")
     client = _client(store)

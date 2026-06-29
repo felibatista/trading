@@ -72,6 +72,8 @@ accounts = Table(
     Column("interval_seconds", Integer, nullable=False),
     Column("starting_cash", Float, nullable=False),
     Column("ai_enabled", Boolean, nullable=False),
+    Column("ai_provider", Text, nullable=False, server_default="anthropic"),
+    Column("ai_model", Text, nullable=False, server_default="claude-haiku-4-5"),
     Column("enabled", Boolean, nullable=False),
     Column("params", JSON, nullable=False),
 )

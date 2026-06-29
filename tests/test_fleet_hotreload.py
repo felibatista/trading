@@ -36,6 +36,17 @@ def test_config_sig_changes_with_params():
     store.close()
 
 
+def test_config_sig_changes_with_provider_and_model():
+    store = Store(":memory:")
+    fleet = Fleet(store, Config(), feed_factory=lambda: _feed())
+    base = {"strategy": "ema_rsi", "params": {"fast": 2}, "symbol": "BTC/USDT",
+            "timeframe": "1m", "ai_enabled": True,
+            "ai_provider": "anthropic", "ai_model": "claude-haiku-4-5"}
+    assert fleet._config_sig(base) != fleet._config_sig({**base, "ai_provider": "openai"})
+    assert fleet._config_sig(base) != fleet._config_sig({**base, "ai_model": "gpt-4o-mini"})
+    store.close()
+
+
 def test_run_once_respects_live_enabled_flag():
     store = Store(":memory:")
     _seed(store, enabled=True)

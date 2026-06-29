@@ -214,7 +214,8 @@ def create_app() -> FastAPI:
             out.append(AccountOut(
                 id=a["id"], name=a["name"], strategy=a["strategy"], symbol=a["symbol"],
                 timeframe=a["timeframe"], interval_seconds=a["interval_seconds"],
-                ai_enabled=a["ai_enabled"], enabled=a["enabled"],
+                ai_enabled=a["ai_enabled"], ai_provider=a["ai_provider"],
+                ai_model=a["ai_model"], enabled=a["enabled"],
                 starting_cash=a["starting_cash"],
                 equity=equity_v, cash=cash,
             ))
@@ -232,6 +233,7 @@ def create_app() -> FastAPI:
             account_id, data["name"], data["strategy"], data["symbol"],
             data["timeframe"], data["interval_seconds"], data["starting_cash"],
             data["ai_enabled"], data["enabled"], data["params"],
+            data["ai_provider"], data["ai_model"],
         )
         eq = store.latest_equity(account_id)
         equity_v, cash = eq if eq is not None else (data["starting_cash"], data["starting_cash"])
@@ -239,6 +241,7 @@ def create_app() -> FastAPI:
             id=account_id, name=data["name"], strategy=data["strategy"],
             symbol=data["symbol"], timeframe=data["timeframe"],
             interval_seconds=data["interval_seconds"], ai_enabled=data["ai_enabled"],
+            ai_provider=data["ai_provider"], ai_model=data["ai_model"],
             enabled=data["enabled"], equity=equity_v, cash=cash,
             starting_cash=data["starting_cash"],
         )
