@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, Settings } from 'lucide-react'
 import { AccountBar } from '@/components/AccountBar'
 import { AccountConfig } from '@/components/AccountConfig'
+import { BacktestView } from '@/components/BacktestView'
 import { ComparisonChart } from '@/components/ComparisonChart'
 import { ActivityLog } from '@/components/ActivityLog'
 import { EquityChart } from '@/components/EquityChart'
@@ -24,6 +25,7 @@ export default function App() {
   const accountList = accounts.data ?? []
   const [account, setAccount] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
+  const [view, setView] = useState<'live' | 'backtest'>('live')
   const selectedAccount = accountList.find((a) => a.id === account) ?? null
 
   // Selección inicial: primera cuenta cuando llega la lista.
@@ -64,6 +66,29 @@ export default function App() {
           </div>
         )}
 
+        <div className="flex w-fit gap-1 rounded-lg bg-zinc-100 p-1 text-sm">
+          <button
+            onClick={() => setView('live')}
+            className={`rounded-md px-3 py-1 font-medium transition ${
+              view === 'live' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
+            }`}
+          >
+            En vivo
+          </button>
+          <button
+            onClick={() => setView('backtest')}
+            className={`rounded-md px-3 py-1 font-medium transition ${
+              view === 'backtest' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
+            }`}
+          >
+            Backtest
+          </button>
+        </div>
+
+        {view === 'backtest' && <BacktestView />}
+
+        {view === 'live' && (
+          <>
         {accountList.length > 0 && (
           <div className="flex items-center justify-between gap-3">
             <AccountBar accounts={accountList} selected={account} onSelect={setAccount} />
@@ -112,6 +137,8 @@ export default function App() {
           <HistoryTable fills={fillList} />
           <ActivityLog decisions={decisionList} />
         </div>
+          </>
+        )}
       </main>
     </div>
   )

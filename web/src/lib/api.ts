@@ -1,4 +1,6 @@
-import type { Account, Candle, Decision, EquityPoint, Fill, Position, Status } from './types'
+import type {
+  Account, BacktestRequest, BacktestResult, Candle, Decision, EquityPoint, Fill, Position, Status,
+} from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
 
@@ -49,5 +51,18 @@ export const api = {
       throw new Error(detail)
     }
     return (await res.json()) as Account
+  },
+  runBacktest: async (req: BacktestRequest): Promise<BacktestResult[]> => {
+    const res = await fetch(`${BASE}/api/backtest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try { const j = await res.json(); detail = JSON.stringify(j.detail ?? j) } catch { /* noop */ }
+      throw new Error(detail)
+    }
+    return (await res.json()) as BacktestResult[]
   },
 }
