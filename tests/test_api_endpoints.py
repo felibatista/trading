@@ -1,0 +1,63 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from api.app import app
+from api.deps import get_config, get_store
+from bot.broker.models import Fill, Position, Side
+from bot.config import BrokerParams, Config
+from bot.store.db import Store
+
+
+@pytest.fixture
+def client():
+    store = Store(":memory:")
+    store.record_equity("2024-01-01T00:00:00+00:00", 10000.0, 10000.0)
+    store.record_equity("2024-01-01T01:00:00+00:00", 10120.0, 9000.0)
+    store.record_fill("2024-01-01T01:00:00+00:00", Fill("BTC/USDT", Side.BUY, 0.01, 100.0, 0.001))
+    store.upsert_position(
+        Position("BTC/USDT", 0.01, 100.0, 98.0, 104.0), "2024-01-01T01:00:00+00:00"
+    )
+    store.record_decision(
+        "2024-01-01T01:00:00+00:00", "BTC/USDT", "BUY", "cruce alcista", 30.5, 29.0, 41.0
+    )
+
+    cfg = Config(
+        exchange="okx", timeframe="1h", symbols=["BTC/USDT"],
+        broker=BrokerParams(kind="paper"),
+    )
+
+    app.dependency_overrides[get_store] = lambda: store
+    app.dependency_overrides[get_config] = lambda: cfg
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+    store.close()
+
+
+def test_status_endpoint(client):
+    r = client.get("/api/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["exchange"] == "okx"
+    assert body["timeframe"] == "1h"
+    assert body["broker_kind"] == "paper"
+    assert body["symbols"] == ["BTC/USDT"]
+    assert body["equity"] == 10120.0
+    assert body["cash"] == 9000.0
+
+
+def test_equity_endpoint_chronological(client):
+    r = client.get("/api/equity?limit=10")
+    assert r.status_code == 200
+    series = r.json()
+    assert [p["equity"] for p in series] == [10000.0, 10120.0]
+    assert set(series[0]) == {"ts", "equity", "cash"}
+
+
+def test_positions_endpoint(client):
+    r = client.get("/api/positions")
+    assert r.status_code == 200
+    pos = r.json()
+    assert len(pos) == 1
+    assert pos[0]["symbol"] == "BTC/USDT"
+    assert pos[0]["entry_price"] == 100.0
+    assert pos[0]["stop_loss"] == 98.0

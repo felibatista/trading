@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+
+from api.deps import get_config, get_store
+from api.models import EquityPoint, PositionOut, StatusResponse
+from bot.config import Config
+from bot.store.db import Store
 
 
 def create_app() -> FastAPI:
@@ -9,6 +14,39 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/status", response_model=StatusResponse)
+    def status(
+        config: Config = Depends(get_config),
+        store: Store = Depends(get_store),
+    ) -> StatusResponse:
+        eq = store.latest_equity()
+        equity, cash = eq if eq is not None else (0.0, 0.0)
+        return StatusResponse(
+            exchange=config.exchange,
+            timeframe=config.timeframe,
+            broker_kind=config.broker.kind,
+            symbols=config.symbols,
+            equity=equity,
+            cash=cash,
+        )
+
+    @app.get("/api/equity", response_model=list[EquityPoint])
+    def equity(limit: int = 200, store: Store = Depends(get_store)) -> list[EquityPoint]:
+        return [EquityPoint(**row) for row in store.equity_series(limit)]
+
+    @app.get("/api/positions", response_model=list[PositionOut])
+    def positions(store: Store = Depends(get_store)) -> list[PositionOut]:
+        return [
+            PositionOut(
+                symbol=p.symbol,
+                quantity=p.quantity,
+                entry_price=p.entry_price,
+                stop_loss=p.stop_loss,
+                take_profit=p.take_profit,
+            )
+            for p in store.get_positions().values()
+        ]
 
     return app
 
