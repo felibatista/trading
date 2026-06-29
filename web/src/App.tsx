@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle } from 'lucide-react'
 import { AccountBar } from '@/components/AccountBar'
+import { ComparisonChart } from '@/components/ComparisonChart'
 import { ActivityLog } from '@/components/ActivityLog'
 import { EquityChart } from '@/components/EquityChart'
 import { HistoryTable } from '@/components/HistoryTable'
@@ -62,6 +63,8 @@ export default function App() {
         {accountList.length > 0 && (
           <AccountBar accounts={accountList} selected={account} onSelect={setAccount} />
         )}
+
+        {accountList.length > 1 && <ComparisonChart accounts={accountList} />}
 
         <KpiRow status={status.data} series={series} />
 
