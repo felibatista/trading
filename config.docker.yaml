@@ -33,7 +33,7 @@ risk:
   max_exposure_pct: 0.50
   max_positions: 2
 ai:
-  enabled: false       # poné true + ANTHROPIC_API_KEY en el entorno para activar el filtro IA
+  enabled: true        # IA prendida: con solo poner ANTHROPIC_API_KEY se activa el veto por cuenta (sin key cae a solo-reglas)
   model: claude-haiku-4-5
   timeout_seconds: 20
   max_retries: 1
