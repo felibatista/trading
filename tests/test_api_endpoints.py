@@ -61,3 +61,26 @@ def test_positions_endpoint(client):
     assert pos[0]["symbol"] == "BTC/USDT"
     assert pos[0]["entry_price"] == 100.0
     assert pos[0]["stop_loss"] == 98.0
+
+
+def test_decisions_endpoint_with_indicators(client):
+    r = client.get("/api/decisions?limit=5")
+    assert r.status_code == 200
+    decisions = r.json()
+    assert len(decisions) == 1
+    d = decisions[0]
+    assert d["action"] == "BUY"
+    assert d["reason"] == "cruce alcista"
+    assert d["rsi"] == 41.0
+    assert d["ema_fast"] == 30.5
+    assert d["ema_slow"] == 29.0
+
+
+def test_fills_endpoint(client):
+    r = client.get("/api/fills?limit=10")
+    assert r.status_code == 200
+    fills = r.json()
+    assert len(fills) == 1
+    assert fills[0]["side"] == "BUY"
+    assert fills[0]["price"] == 100.0
+    assert fills[0]["quantity"] == 0.01

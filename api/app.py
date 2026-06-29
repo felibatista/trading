@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI
 
 from api.deps import get_config, get_store
-from api.models import EquityPoint, PositionOut, StatusResponse
+from api.models import DecisionOut, EquityPoint, FillOut, PositionOut, StatusResponse
 from bot.config import Config
 from bot.store.db import Store
 
@@ -47,6 +47,14 @@ def create_app() -> FastAPI:
             )
             for p in store.get_positions().values()
         ]
+
+    @app.get("/api/decisions", response_model=list[DecisionOut])
+    def decisions(limit: int = 20, store: Store = Depends(get_store)) -> list[DecisionOut]:
+        return [DecisionOut(**row) for row in store.recent_decisions(limit)]
+
+    @app.get("/api/fills", response_model=list[FillOut])
+    def fills(limit: int = 50, store: Store = Depends(get_store)) -> list[FillOut]:
+        return [FillOut(**row) for row in store.recent_fills(limit)]
 
     return app
 
