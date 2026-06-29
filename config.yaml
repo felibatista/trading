@@ -24,7 +24,8 @@ risk:
   max_exposure_pct: 0.30
   max_positions: 3
 ai:
-  enabled: true            # IA prendida; solo falta ANTHROPIC_API_KEY en el entorno
-  model: claude-haiku-4-5  # configurable a claude-sonnet-4-6 / claude-opus-4-8
-  timeout_seconds: 20      # corto: no cuelga el ciclo de trading
-  max_retries: 1           # ante error/timeout cae a solo-reglas
+  enabled: true              # IA prendida; falta la API key del proveedor en el entorno
+  provider: anthropic        # "anthropic" | "openai" (default; en la flota se elige por cuenta)
+  model: claude-haiku-4-5    # claude-* (anthropic) o gpt-* (openai), según provider
+  timeout_seconds: 20        # corto: no cuelga el ciclo de trading
+  max_retries: 1             # ante error/timeout cae a solo-reglas

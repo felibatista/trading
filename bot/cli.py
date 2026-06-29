@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from bot.ai.advisor import AIAdvisor, AnthropicAdvisor, NoopAdvisor
+from bot.ai.advisor import AIAdvisor, AnthropicAdvisor, NoopAdvisor, OpenAIAdvisor
 from bot.broker.base import Broker
 from bot.broker.okx_demo import OkxDemoBroker
 from bot.broker.paper import LocalPaperBroker
@@ -44,15 +44,28 @@ def build_broker(config: Config, store: Store | None = None, account: str = "def
     return LocalPaperBroker(cash, bp.fee_rate, bp.slippage, holdings=holdings)
 
 
+def make_advisor(
+    provider: str, model: str, timeout_seconds: float, max_retries: int
+) -> AIAdvisor:
+    # No instancia el cliente acá (es perezoso): no requiere la API key hasta el primer
+    # ciclo. Si falta la key o falla, el advisor cae a solo-reglas.
+    if provider == "openai":
+        return OpenAIAdvisor(
+            model=model, timeout_seconds=timeout_seconds, max_retries=max_retries
+        )
+    return AnthropicAdvisor(
+        model=model, timeout_seconds=timeout_seconds, max_retries=max_retries
+    )
+
+
 def build_advisor(config: Config) -> AIAdvisor:
     if not config.ai.enabled:
         return NoopAdvisor()
-    # No instancia el cliente de Anthropic acá (es perezoso): no requiere la API key
-    # hasta el primer ciclo. Si falta la key o falla, cae a solo-reglas.
-    return AnthropicAdvisor(
-        model=config.ai.model,
-        timeout_seconds=config.ai.timeout_seconds,
-        max_retries=config.ai.max_retries,
+    return make_advisor(
+        config.ai.provider,
+        config.ai.model,
+        config.ai.timeout_seconds,
+        config.ai.max_retries,
     )
 
 
@@ -97,10 +110,9 @@ def _cmd_run(args) -> int:
         account="default",
     )
     if config.ai.enabled:
-        import os
-
-        estado = "lista" if os.environ.get("ANTHROPIC_API_KEY") else "SIN API key (cae a solo-reglas)"
-        print(f"IA: {config.ai.model} · {estado}")
+        key_env = "OPENAI_API_KEY" if config.ai.provider == "openai" else "ANTHROPIC_API_KEY"
+        estado = "lista" if os.environ.get(key_env) else f"SIN {key_env} (cae a solo-reglas)"
+        print(f"IA: {config.ai.provider}/{config.ai.model} · {estado}")
     if args.loop:
         print(f"Loop cada {config.loop_interval_seconds}s · {config.broker.kind} · {exchange}")
         engine.run_loop([args.symbol], config.loop_interval_seconds)

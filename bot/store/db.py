@@ -13,6 +13,7 @@ class Store:
         self._engine = make_engine(target)
         metadata.create_all(self._engine)
         self._migrate_legacy()
+        self._migrate_accounts()
 
     def _migrate_legacy(self) -> None:
         # Solo SQLite: adapta tablas creadas con esquemas viejos.
@@ -63,6 +64,21 @@ class Store:
                         conn.execute(text(
                             f"ALTER TABLE decisions ADD COLUMN {col} {typedef}"
                         ))
+
+    def _migrate_accounts(self) -> None:
+        # Agrega ai_provider / ai_model a accounts si faltan (DB sembrada antes del soporte
+        # multi-proveedor). ADD COLUMN con DEFAULT constante backfillea las filas viejas y
+        # es compatible con SQLite y Postgres (por eso no se restringe a un dialecto).
+        insp = inspect(self._engine)
+        if "accounts" not in set(insp.get_table_names()):
+            return
+        cols = {c["name"] for c in insp.get_columns("accounts")}
+        for col, default in (("ai_provider", "anthropic"), ("ai_model", "claude-haiku-4-5")):
+            if col not in cols:
+                with self._engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE accounts ADD COLUMN {col} TEXT NOT NULL DEFAULT '{default}'"
+                    ))
 
     # ---- decisiones ----
     def record_decision(
@@ -183,11 +199,13 @@ class Store:
         self, id: str, name: str, strategy: str, symbol: str, timeframe: str,
         interval_seconds: int, starting_cash: float, ai_enabled: bool,
         enabled: bool, params: dict,
+        ai_provider: str = "anthropic", ai_model: str = "claude-haiku-4-5",
     ) -> None:
         values = dict(
             name=name, strategy=strategy, symbol=symbol, timeframe=timeframe,
             interval_seconds=interval_seconds, starting_cash=starting_cash,
             ai_enabled=ai_enabled, enabled=enabled, params=params,
+            ai_provider=ai_provider, ai_model=ai_model,
         )
         with self._engine.begin() as conn:
             res = conn.execute(

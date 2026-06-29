@@ -36,6 +36,8 @@ class RiskParams:
 class AIParams:
     # Apagada por defecto en el código (seguro); config.yaml puede prenderla.
     enabled: bool = False
+    # Default de semilla y del path CLI; en la flota, cada cuenta elige proveedor/modelo.
+    provider: str = "anthropic"  # "anthropic" | "openai"
     model: str = "claude-haiku-4-5"  # configurable a claude-sonnet-4-6 / claude-opus-4-8
     timeout_seconds: float = 20.0
     max_retries: int = 1
@@ -90,6 +92,7 @@ def load_config(path: str | Path) -> Config:
         ),
         ai=AIParams(
             enabled=ai.get("enabled", False),
+            provider=ai.get("provider", "anthropic"),
             model=ai.get("model", "claude-haiku-4-5"),
             timeout_seconds=ai.get("timeout_seconds", 20.0),
             max_retries=ai.get("max_retries", 1),

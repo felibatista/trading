@@ -72,6 +72,8 @@ export interface Account {
   timeframe: string
   interval_seconds: number
   ai_enabled: boolean
+  ai_provider: string
+  ai_model: string
   enabled: boolean
   equity: number
   cash: number

@@ -1,4 +1,6 @@
-from bot.ai.advisor import AnthropicAdvisor, NoopAdvisor
+import json
+
+from bot.ai.advisor import AnthropicAdvisor, NoopAdvisor, OpenAIAdvisor
 from bot.models import Action, AIContext, AIVerdict
 
 
@@ -82,3 +84,68 @@ def test_prompt_carries_no_secrets_or_position_object():
     low = payload.lower()
     assert "api_key" not in low and "secret" not in low and "password" not in low
     assert "Position(" not in payload  # nunca se serializa el objeto Position
+
+
+# ---- OpenAIAdvisor (espejo del de Anthropic, sobre function calling) ----
+
+class _FakeCompletions:
+    def __init__(self, parent):
+        self.parent = parent
+
+    def create(self, **kwargs):
+        self.parent.calls.append(kwargs)
+        if self.parent.raise_exc is not None:
+            raise self.parent.raise_exc
+        fn = type("Fn", (), {"name": "emit_verdict",
+                             "arguments": json.dumps(self.parent.tool_input)})()
+        call = type("Call", (), {"function": fn})()
+        msg = type("Msg", (), {"tool_calls": [call]})()
+        choice = type("Choice", (), {"message": msg})()
+        return type("Resp", (), {"choices": [choice]})()
+
+
+class FakeOpenAIClient:
+    def __init__(self, tool_input=None, raise_exc=None):
+        self.tool_input = tool_input
+        self.raise_exc = raise_exc
+        self.calls = []
+        self.chat = type("Chat", (), {"completions": _FakeCompletions(self)})()
+
+    def with_options(self, **kwargs):
+        return self
+
+
+def test_openai_advisor_parses_verdict():
+    client = FakeOpenAIClient(tool_input={"confirm": False, "confidence": 0.3, "rationale": "débil"})
+    adv = OpenAIAdvisor(model="gpt-4o-mini", client=client, log=lambda m: None)
+    assert adv.enabled is True
+    v = adv.review(ctx())
+    assert v.confirm is False
+    assert v.confidence == 0.3
+    assert v.rationale == "débil"
+    assert v.ai_used is True
+
+
+def test_openai_advisor_uses_configured_model():
+    client = FakeOpenAIClient(tool_input={"confirm": True, "confidence": 0.9, "rationale": "ok"})
+    adv = OpenAIAdvisor(model="gpt-4o", client=client, log=lambda m: None)
+    adv.review(ctx())
+    assert client.calls[0]["model"] == "gpt-4o"
+
+
+def test_openai_advisor_falls_back_to_rules_on_error():
+    client = FakeOpenAIClient(raise_exc=RuntimeError("boom"))
+    adv = OpenAIAdvisor(model="gpt-4o-mini", client=client, log=lambda m: None)
+    v = adv.review(ctx())
+    assert v.confirm is True      # fail-open: se comporta como solo-reglas
+    assert v.ai_used is False
+
+
+def test_openai_prompt_carries_no_secrets_or_position_object():
+    client = FakeOpenAIClient(tool_input={"confirm": True, "confidence": 0.9, "rationale": "ok"})
+    adv = OpenAIAdvisor(model="gpt-4o-mini", client=client, log=lambda m: None)
+    adv.review(ctx())
+    payload = str(client.calls[0].get("messages", ""))
+    low = payload.lower()
+    assert "api_key" not in low and "secret" not in low and "password" not in low
+    assert "Position(" not in payload

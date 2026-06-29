@@ -33,7 +33,8 @@ risk:
   max_exposure_pct: 0.50
   max_positions: 2
 ai:
-  enabled: true        # IA prendida: con solo poner ANTHROPIC_API_KEY se activa el veto por cuenta (sin key cae a solo-reglas)
+  enabled: true        # IA prendida: con solo poner la API key del proveedor se activa el veto por cuenta (sin key cae a solo-reglas)
+  provider: anthropic  # default de semilla; el proveedor real (anthropic/openai) y el modelo se eligen POR CUENTA en el panel
   model: claude-haiku-4-5
-  timeout_seconds: 20
+  timeout_seconds: 20  # globales (compartidos por todas las cuentas)
   max_retries: 1

@@ -19,8 +19,10 @@ services:
       AMERICO_RUN_FLEET: "1"
       # Opcional: Postgres gestionado de Coolify. Si está, la DB usa Postgres.
       DATABASE_URL: ${DATABASE_URL:-}
-      # IA (opcional): la veta entradas por cuenta si está la key.
+      # IA (opcional): veta entradas por cuenta si está la key del proveedor elegido.
+      # Cada cuenta elige anthropic/openai y modelo desde el panel.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OKX_API_KEY: ${OKX_API_KEY:-}
       OKX_API_SECRET: ${OKX_API_SECRET:-}
       OKX_API_PASSWORD: ${OKX_API_PASSWORD:-}

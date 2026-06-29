@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 
 _STRATS = {"ema_rsi", "macd", "bollinger", "breakout", "price_action"}
 _TFS = {"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"}
+_PROVIDERS = {"anthropic", "openai"}
 
 
 class StrategyOut(BaseModel):
@@ -80,6 +81,8 @@ class AccountOut(BaseModel):
     timeframe: str
     interval_seconds: int
     ai_enabled: bool
+    ai_provider: str
+    ai_model: str
     enabled: bool
     starting_cash: float
     equity: float
@@ -94,6 +97,8 @@ class AccountUpdate(BaseModel):
     interval_seconds: int | None = Field(default=None, ge=5, le=86400)
     starting_cash: float | None = Field(default=None, gt=0)
     ai_enabled: bool | None = None
+    ai_provider: str | None = None
+    ai_model: str | None = Field(default=None, min_length=1)
     enabled: bool | None = None
     params: dict | None = None
 
@@ -109,4 +114,11 @@ class AccountUpdate(BaseModel):
     def _v_timeframe(cls, v: str | None) -> str | None:
         if v is not None and v not in _TFS:
             raise ValueError(f"timeframe inválido: {v}")
+        return v
+
+    @field_validator("ai_provider")
+    @classmethod
+    def _v_provider(cls, v: str | None) -> str | None:
+        if v is not None and v not in _PROVIDERS:
+            raise ValueError(f"proveedor inválido: {v}")
         return v
