@@ -63,3 +63,17 @@ export interface Fill {
   price: number
   fee: number
 }
+
+export interface Account {
+  id: string
+  name: string
+  strategy: string
+  symbol: string
+  timeframe: string
+  interval_seconds: number
+  ai_enabled: boolean
+  enabled: boolean
+  equity: number
+  cash: number
+  starting_cash: number
+}

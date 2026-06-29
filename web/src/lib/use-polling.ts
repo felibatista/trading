@@ -6,7 +6,11 @@ export interface PollingState<T> {
   loading: boolean
 }
 
-export function usePolling<T>(fn: () => Promise<T>, intervalMs: number): PollingState<T> {
+export function usePolling<T>(
+  fn: () => Promise<T>,
+  intervalMs: number,
+  deps: unknown[] = [],
+): PollingState<T> {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
@@ -34,7 +38,7 @@ export function usePolling<T>(fn: () => Promise<T>, intervalMs: number): Polling
       active = false
       clearInterval(id)
     }
-  }, [intervalMs])
+  }, [intervalMs, ...deps])
 
   return { data, error, loading }
 }

@@ -1,4 +1,4 @@
-import type { Candle, Decision, EquityPoint, Fill, Position, Status } from './types'
+import type { Account, Candle, Decision, EquityPoint, Fill, Position, Status } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
 
@@ -8,17 +8,33 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T
 }
 
+function q(params: Record<string, string | number | undefined>): string {
+  const sp = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') sp.set(k, String(v))
+  }
+  const s = sp.toString()
+  return s ? `?${s}` : ''
+}
+
 export const api = {
-  getStatus: () => getJson<Status>('/api/status'),
-  getEquity: (limit = 200) => getJson<EquityPoint[]>(`/api/equity?limit=${limit}`),
-  getPositions: () => getJson<Position[]>('/api/positions'),
-  getDecisions: (limit = 20) => getJson<Decision[]>(`/api/decisions?limit=${limit}`),
-  getFills: (limit = 50) => getJson<Fill[]>(`/api/fills?limit=${limit}`),
-  getCandles: (symbol?: string, timeframe?: string, limit = 120) => {
-    const params = new URLSearchParams()
-    if (symbol) params.set('symbol', symbol)
-    if (timeframe) params.set('timeframe', timeframe)
-    params.set('limit', String(limit))
-    return getJson<Candle[]>(`/api/candles?${params.toString()}`)
+  getAccounts: () => getJson<Account[]>('/api/accounts'),
+  getStatus: (account?: string) => getJson<Status>(`/api/status${q({ account })}`),
+  getEquity: (limit = 200, account?: string) =>
+    getJson<EquityPoint[]>(`/api/equity${q({ limit, account })}`),
+  getPositions: (account?: string) => getJson<Position[]>(`/api/positions${q({ account })}`),
+  getDecisions: (limit = 20, account?: string) =>
+    getJson<Decision[]>(`/api/decisions${q({ limit, account })}`),
+  getFills: (limit = 50, account?: string) =>
+    getJson<Fill[]>(`/api/fills${q({ limit, account })}`),
+  getCandles: (symbol?: string, timeframe?: string, limit = 120, account?: string) =>
+    getJson<Candle[]>(`/api/candles${q({ symbol, timeframe, limit, account })}`),
+  getAllAccountsEquity: async (ids: string[], limit = 200): Promise<Record<string, EquityPoint[]>> => {
+    const series = await Promise.all(
+      ids.map((id) => getJson<EquityPoint[]>(`/api/equity${q({ limit, account: id })}`)),
+    )
+    const out: Record<string, EquityPoint[]> = {}
+    ids.forEach((id, i) => { out[id] = series[i] })
+    return out
   },
 }
