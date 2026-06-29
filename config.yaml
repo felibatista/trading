@@ -3,9 +3,23 @@ timeframe: "1h"
 symbols:
   - BTC/USDT
   - ETH/USDT
+limit: 200
+db_path: americo.sqlite
+loop_interval_seconds: 3600
 strategy:
   fast: 20
   slow: 50
   rsi_period: 14
   rsi_oversold: 35
   rsi_overbought: 70
+broker:
+  kind: paper          # paper | okx_demo
+  paper_cash: 10000
+  fee_rate: 0.001
+  slippage: 0.0005
+risk:
+  risk_per_trade: 0.01
+  stop_loss_pct: 0.02
+  take_profit_pct: 0.04
+  max_exposure_pct: 0.30
+  max_positions: 3
