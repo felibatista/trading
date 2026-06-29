@@ -79,7 +79,7 @@ def env():
 def test_status_live_fields_with_decision(env):
     client, store, _feed, _cfg = env
     store.record_decision(
-        "2024-01-01T01:00:00+00:00", "BTC/USDT", "BUY", "cruce", 30.5, 29.0, 41.0
+        "default", "2024-01-01T01:00:00+00:00", "BTC/USDT", "BUY", "cruce", 30.5, 29.0, 41.0
     )
     r = client.get("/api/status")
     assert r.status_code == 200

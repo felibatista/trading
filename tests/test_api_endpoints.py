@@ -11,14 +11,14 @@ from bot.store.db import Store
 @pytest.fixture
 def client():
     store = Store(":memory:")
-    store.record_equity("2024-01-01T00:00:00+00:00", 10000.0, 10000.0)
-    store.record_equity("2024-01-01T01:00:00+00:00", 10120.0, 9000.0)
-    store.record_fill("2024-01-01T01:00:00+00:00", Fill("BTC/USDT", Side.BUY, 0.01, 100.0, 0.001))
+    store.record_equity("default", "2024-01-01T00:00:00+00:00", 10000.0, 10000.0)
+    store.record_equity("default", "2024-01-01T01:00:00+00:00", 10120.0, 9000.0)
+    store.record_fill("default", "2024-01-01T01:00:00+00:00", Fill("BTC/USDT", Side.BUY, 0.01, 100.0, 0.001))
     store.upsert_position(
-        Position("BTC/USDT", 0.01, 100.0, 98.0, 104.0), "2024-01-01T01:00:00+00:00"
+        "default", Position("BTC/USDT", 0.01, 100.0, 98.0, 104.0), "2024-01-01T01:00:00+00:00"
     )
     store.record_decision(
-        "2024-01-01T01:00:00+00:00", "BTC/USDT", "BUY", "cruce alcista", 30.5, 29.0, 41.0
+        "default", "2024-01-01T01:00:00+00:00", "BTC/USDT", "BUY", "cruce alcista", 30.5, 29.0, 41.0
     )
 
     cfg = Config(

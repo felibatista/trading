@@ -67,3 +67,16 @@ class FillOut(BaseModel):
     quantity: float
     price: float
     fee: float
+
+
+class AccountOut(BaseModel):
+    id: str
+    name: str
+    strategy: str
+    symbol: str
+    timeframe: str
+    interval_seconds: int
+    ai_enabled: bool
+    enabled: bool
+    equity: float
+    cash: float

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.deps import get_config, get_store
 from api.models import (
+    AccountOut,
     CandleOut,
     DecisionOut,
     EquityPoint,
@@ -74,13 +75,14 @@ def create_app() -> FastAPI:
 
     @app.get("/api/status", response_model=StatusResponse)
     def status(
+        account: str = "default",
         config: Config = Depends(get_config),
         store: Store = Depends(get_store),
     ) -> StatusResponse:
-        eq = store.latest_equity()
+        eq = store.latest_equity(account)
         equity, cash = eq if eq is not None else (0.0, 0.0)
 
-        recent = store.recent_decisions(1)
+        recent = store.recent_decisions(account, 1)
         last_run_at = recent[0]["ts"] if recent else None
         next_run_at: str | None = None
         if last_run_at is not None:
@@ -155,11 +157,11 @@ def create_app() -> FastAPI:
         return out
 
     @app.get("/api/equity", response_model=list[EquityPoint])
-    def equity(limit: int = 200, store: Store = Depends(get_store)) -> list[EquityPoint]:
-        return [EquityPoint(**row) for row in store.equity_series(limit)]
+    def equity(limit: int = 200, account: str = "default", store: Store = Depends(get_store)) -> list[EquityPoint]:
+        return [EquityPoint(**row) for row in store.equity_series(account, limit)]
 
     @app.get("/api/positions", response_model=list[PositionOut])
-    def positions(store: Store = Depends(get_store)) -> list[PositionOut]:
+    def positions(account: str = "default", store: Store = Depends(get_store)) -> list[PositionOut]:
         return [
             PositionOut(
                 symbol=p.symbol,
@@ -168,16 +170,30 @@ def create_app() -> FastAPI:
                 stop_loss=p.stop_loss,
                 take_profit=p.take_profit,
             )
-            for p in store.get_positions().values()
+            for p in store.get_positions(account).values()
         ]
 
     @app.get("/api/decisions", response_model=list[DecisionOut])
-    def decisions(limit: int = 20, store: Store = Depends(get_store)) -> list[DecisionOut]:
-        return [DecisionOut(**row) for row in store.recent_decisions(limit)]
+    def decisions(limit: int = 20, account: str = "default", store: Store = Depends(get_store)) -> list[DecisionOut]:
+        return [DecisionOut(**row) for row in store.recent_decisions(account, limit)]
 
     @app.get("/api/fills", response_model=list[FillOut])
-    def fills(limit: int = 50, store: Store = Depends(get_store)) -> list[FillOut]:
-        return [FillOut(**row) for row in store.recent_fills(limit)]
+    def fills(limit: int = 50, account: str = "default", store: Store = Depends(get_store)) -> list[FillOut]:
+        return [FillOut(**row) for row in store.recent_fills(account, limit)]
+
+    @app.get("/api/accounts", response_model=list[AccountOut])
+    def accounts_list(store: Store = Depends(get_store)) -> list[AccountOut]:
+        out: list[AccountOut] = []
+        for a in store.list_accounts():
+            eq = store.latest_equity(a["id"])
+            equity_v, cash = eq if eq is not None else (a["starting_cash"], a["starting_cash"])
+            out.append(AccountOut(
+                id=a["id"], name=a["name"], strategy=a["strategy"], symbol=a["symbol"],
+                timeframe=a["timeframe"], interval_seconds=a["interval_seconds"],
+                ai_enabled=a["ai_enabled"], enabled=a["enabled"],
+                equity=equity_v, cash=cash,
+            ))
+        return out
 
     return app
 
